@@ -44,5 +44,5 @@ python local_bridge/server.py
 
 Then the UI can send a POST to `/order` with:
 ```json
-{"symbol": "BTCUSDT", "side": "BUY", "type": "MARKET", "quantity": 0.001}
+{"symbol": "BTCUSDT", "side": "BUY", "type": "MARKET", "quoteOrderQty": 50}
 ```

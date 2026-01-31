@@ -312,8 +312,8 @@
           <input id="min-target-pct" type="number" min="0.2" step="0.1" value="0.6" />
           <label for="auto-refresh">자동 갱신 간격 (초)</label>
           <input id="auto-refresh" type="number" min="5" step="5" value="30" />
-          <label for="live-quantity">실거래 수량 (BTC)</label>
-          <input id="live-quantity" type="number" min="0.0001" step="0.0001" value="0.001" />
+          <label for="live-quantity">실거래 금액 (USDT)</label>
+          <input id="live-quantity" type="number" min="5" step="1" value="50" />
           <button type="button" id="analyze">예측 확인</button>
         </div>
         <div class="card">
@@ -655,7 +655,7 @@
         }
       };
 
-      const placeLiveOrder = async ({ side, quantity }) => {
+      const placeLiveOrder = async ({ side, quoteOrderQty }) => {
         const baseUrl = apiBaseInput.value.trim();
         if (!baseUrl) {
           throw new Error("로컬 API 주소가 필요합니다.");
@@ -669,7 +669,7 @@
             symbol: "BTCUSDT",
             side,
             type: "MARKET",
-            quantity,
+            quoteOrderQty,
           }),
         });
         const data = await response.json();
@@ -748,9 +748,9 @@
           liveOrderStatus.textContent = "실거래 위험 고지에 동의해야 합니다.";
           return;
         }
-        const quantity = Number(liveQuantityInput.value);
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          liveOrderStatus.textContent = "유효한 주문 수량을 입력해 주세요.";
+        const quoteOrderQty = Number(liveQuantityInput.value);
+        if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
+          liveOrderStatus.textContent = "유효한 주문 금액을 입력해 주세요.";
           return;
         }
         if (tradeStatus.textContent.includes("관망")) {
@@ -759,7 +759,7 @@
         }
         try {
           const side = direction.textContent === "숏" ? "SELL" : "BUY";
-          const result = await placeLiveOrder({ side, quantity });
+          const result = await placeLiveOrder({ side, quoteOrderQty });
           liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
         } catch (error) {
           liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";

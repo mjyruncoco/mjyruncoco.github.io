@@ -53,6 +53,7 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
         side = payload.get("side", "BUY")
         order_type = payload.get("type", "MARKET")
         quantity = payload.get("quantity")
+        quote_order_qty = payload.get("quoteOrderQty")
 
         api_key = os.getenv("BINANCE_API_KEY")
         api_secret = os.getenv("BINANCE_API_SECRET")
@@ -63,7 +64,7 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if not quantity:
+        if not quantity and not quote_order_qty:
             self._set_headers(400)
             self.wfile.write(json.dumps({"error": "missing_quantity"}).encode("utf-8"))
             return
@@ -74,10 +75,13 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
             "symbol": symbol,
             "side": side,
             "type": order_type,
-            "quantity": quantity,
             "timestamp": int(time.time() * 1000),
             "recvWindow": 5000,
         }
+        if quote_order_qty:
+            params["quoteOrderQty"] = quote_order_qty
+        else:
+            params["quantity"] = quantity
         query_string = urlencode(params)
         signature = hmac.new(
             api_secret.encode("utf-8"),
