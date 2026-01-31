@@ -42,6 +42,11 @@ export BINANCE_BASE_URL=https://testnet.binance.vision
 python local_bridge/server.py
 ```
 
+Alternatively, you can create a local config file at `local_bridge/keys.json`:
+```json
+{"api_key": "your_key", "api_secret": "your_secret"}
+```
+
 Then the UI can send a POST to `/order` with:
 ```json
 {"symbol": "BTCUSDT", "side": "BUY", "type": "MARKET", "quoteOrderQty": 50}

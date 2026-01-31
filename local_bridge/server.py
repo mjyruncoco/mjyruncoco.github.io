@@ -14,6 +14,8 @@ CONFIG = {
     "base_url": os.getenv("BINANCE_BASE_URL", "https://api.binance.com"),
 }
 
+LOCAL_CONFIG_PATH = os.getenv("LOCAL_BRIDGE_CONFIG", "local_bridge/keys.json")
+
 
 class LocalBridgeHandler(BaseHTTPRequestHandler):
     def _set_headers(self, status: int = 200) -> None:
@@ -83,6 +85,15 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
 
         api_key = os.getenv("BINANCE_API_KEY")
         api_secret = os.getenv("BINANCE_API_SECRET")
+        if (not api_key or not api_secret) and os.path.exists(LOCAL_CONFIG_PATH):
+            try:
+                with open(LOCAL_CONFIG_PATH, "r", encoding="utf-8") as file:
+                    data = json.load(file)
+                api_key = api_key or data.get("api_key")
+                api_secret = api_secret or data.get("api_secret")
+            except (OSError, json.JSONDecodeError):
+                api_key = api_key or None
+                api_secret = api_secret or None
         if not api_key or not api_secret:
             self._set_headers(400)
             self.wfile.write(

@@ -401,6 +401,26 @@
               가상 진입 기준으로 현재 가격이 목표/손절 중 어디에 가까운지 표시합니다.
             </p>
           </div>
+          <div class="backtest">
+            <p><strong>멀티 타임프레임 체크</strong> · 일봉/1시간/15분봉 추세가 같은 방향일 때 5분봉 진입</p>
+            <p class="note" id="tf-status">타임프레임 분석을 로딩 중입니다.</p>
+            <div class="metric">
+              <span>일봉</span>
+              <strong id="tf-1d">-</strong>
+            </div>
+            <div class="metric">
+              <span>1시간</span>
+              <strong id="tf-1h">-</strong>
+            </div>
+            <div class="metric">
+              <span>15분</span>
+              <strong id="tf-15m">-</strong>
+            </div>
+            <div class="metric">
+              <span>5분 (진입)</span>
+              <strong id="tf-5m">-</strong>
+            </div>
+          </div>
           <div class="backtest" id="backtest">
             <p><strong>간단 백테스트</strong> · 최근 데이터로 추세 신호를 적용한 참고용 결과입니다.</p>
             <p id="backtest-summary">데이터를 입력하면 결과가 표시됩니다.</p>
@@ -531,6 +551,11 @@
       const priceChart = document.getElementById("price-chart");
       const tradeStatus = document.getElementById("trade-status");
       const backtestSummary = document.getElementById("backtest-summary");
+      const tfStatus = document.getElementById("tf-status");
+      const tf1d = document.getElementById("tf-1d");
+      const tf1h = document.getElementById("tf-1h");
+      const tf15m = document.getElementById("tf-15m");
+      const tf5m = document.getElementById("tf-5m");
       const liveOrderButton = document.getElementById("live-order");
       const liveOrderStatus = document.getElementById("live-order-status");
       const livePnl = document.getElementById("live-pnl");
@@ -555,6 +580,7 @@
       const connectionMessage = document.getElementById("connection-message");
 
       let lastLiveTrade = null;
+      let timeframeSignals = null;
 
       const parsePrices = (raw) =>
         raw
@@ -602,6 +628,23 @@
           total += Math.abs(values[i] - values[i - 1]);
         }
         return total / period;
+      };
+
+      const computeSignal = (prices) => {
+        if (prices.length < 3) {
+          return { recommendation: "중립", rsi: null, shortSMA: null, longSMA: null };
+        }
+        const shortSMA = calculateSMA(prices, Math.min(7, prices.length));
+        const longSMA = calculateSMA(prices, Math.min(25, prices.length));
+        const rsi = calculateRSI(prices);
+        const trendBias = shortSMA && longSMA ? shortSMA - longSMA : 0;
+        let recommendation = "중립";
+        if (trendBias > 0 && rsi !== null && rsi >= 50) {
+          recommendation = "롱";
+        } else if (trendBias < 0 && rsi !== null && rsi <= 50) {
+          recommendation = "숏";
+        }
+        return { recommendation, rsi, shortSMA, longSMA };
       };
 
       const applyRiskProfile = (profile) => {
@@ -819,6 +862,25 @@
         liveReturn.textContent = `수익률: ${formatNumber(pnlPct)}%`;
       };
 
+      const updateTimeframeUI = () => {
+        if (!timeframeSignals) {
+          tfStatus.textContent = "타임프레임 분석을 로딩 중입니다.";
+          return;
+        }
+        tf1d.textContent = timeframeSignals["1d"]?.recommendation || "-";
+        tf1h.textContent = timeframeSignals["1h"]?.recommendation || "-";
+        tf15m.textContent = timeframeSignals["15m"]?.recommendation || "-";
+        tf5m.textContent = timeframeSignals["5m"]?.recommendation || "-";
+        const aligned =
+          timeframeSignals["1d"]?.recommendation &&
+          timeframeSignals["1d"].recommendation !== "중립" &&
+          timeframeSignals["1d"].recommendation === timeframeSignals["1h"]?.recommendation &&
+          timeframeSignals["1d"].recommendation === timeframeSignals["15m"]?.recommendation;
+        tfStatus.textContent = aligned
+          ? "상위 시간대 정합성이 확인되었습니다."
+          : "상위 시간대가 일치하지 않아 진입을 보류합니다.";
+      };
+
       const loadSavedKeys = () => {
         const savedBase = localStorage.getItem("binanceApiBase") || "http://127.0.0.1:8787";
         const savedKey = localStorage.getItem("binanceApiKey") || "";
@@ -944,8 +1006,38 @@
         }
       };
 
+      const loadMultiTimeframes = async () => {
+        const intervals = ["1d", "1h", "15m", "5m"];
+        const limit = 120;
+        try {
+          const results = {};
+          for (const interval of intervals) {
+            const response = await fetch(
+              `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
+            );
+            if (!response.ok) {
+              throw new Error("시세를 불러오지 못했습니다.");
+            }
+            const data = await response.json();
+            const closes = data.map((candle) => Number(candle[4])).filter(Number.isFinite);
+            results[interval] = {
+              prices: closes,
+              ...computeSignal(closes),
+            };
+          }
+          timeframeSignals = results;
+          if (results["5m"]?.prices?.length) {
+            pricesInput.value = results["5m"].prices.join(", ");
+          }
+          updateTimeframeUI();
+        } catch (error) {
+          tfStatus.textContent = "타임프레임 데이터를 불러오지 못했습니다.";
+        }
+      };
+
       loadMarketButton.addEventListener("click", () => {
         loadMarketPrices();
+        loadMultiTimeframes();
       });
 
       loadSavedKeys();
@@ -1001,6 +1093,21 @@
         } else if (trendBias < 0 && rsi !== null && rsi <= 50) {
           recommendation = "숏 관찰";
           detail = "단기 이동평균이 장기 이동평균 아래이며 RSI가 50 이하입니다.";
+        }
+
+        if (timeframeSignals) {
+          const highTF = timeframeSignals["1d"]?.recommendation;
+          const midTF = timeframeSignals["1h"]?.recommendation;
+          const lowTF = timeframeSignals["15m"]?.recommendation;
+          const aligned =
+            highTF &&
+            highTF !== "중립" &&
+            highTF === midTF &&
+            highTF === lowTF;
+          if (!aligned) {
+            recommendation = "중립";
+            detail = "상위 시간대가 일치하지 않아 관망이 권장됩니다.";
+          }
         }
 
         const confidenceScore =
