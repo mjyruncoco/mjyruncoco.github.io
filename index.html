@@ -581,6 +581,10 @@
 
       let lastLiveTrade = null;
       let timeframeSignals = null;
+      let autoTradeState = {
+        position: null,
+        pending: false,
+      };
 
       const parsePrices = (raw) =>
         raw
@@ -803,28 +807,182 @@
         }
       };
 
-      const placeLiveOrder = async ({ side, quoteOrderQty }) => {
+      const placeLiveOrder = async ({ side, quoteOrderQty, quantity }) => {
         const baseUrl = apiBaseInput.value.trim();
         if (!baseUrl) {
           throw new Error("로컬 API 주소가 필요합니다.");
+        }
+        const payload = {
+          symbol: "BTCUSDT",
+          side,
+          type: "MARKET",
+        };
+        if (Number.isFinite(quoteOrderQty) && quoteOrderQty > 0) {
+          payload.quoteOrderQty = quoteOrderQty;
+        }
+        if (Number.isFinite(quantity) && quantity > 0) {
+          payload.quantity = quantity;
+        }
+        if (!payload.quoteOrderQty && !payload.quantity) {
+          throw new Error("주문 금액 또는 수량이 필요합니다.");
         }
         const response = await fetch(`${baseUrl}/order`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            symbol: "BTCUSDT",
-            side,
-            type: "MARKET",
-            quoteOrderQty,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data?.error || "주문 요청에 실패했습니다.");
         }
         return data;
+      };
+
+      const parseOrderMetrics = (result) => {
+        const fills = Array.isArray(result?.fills) ? result.fills : [];
+        const fillQty = fills.reduce((sum, fill) => sum + Number(fill.qty || 0), 0);
+        const fillQuote = fills.reduce(
+          (sum, fill) => sum + Number(fill.price || 0) * Number(fill.qty || 0),
+          0
+        );
+        const executedQty = fillQty || Number(result?.executedQty || 0);
+        const avgPrice =
+          fillQty > 0
+            ? fillQuote / fillQty
+            : Number(result?.price || result?.avgPrice || 0);
+        return { executedQty, avgPrice };
+      };
+
+      const updateAutoTradePosition = ({ side, entryPrice, quantity, targets, stop }) => {
+        autoTradeState.position = {
+          side,
+          entryPrice,
+          quantity,
+          remainingQty: quantity,
+          targets,
+          stop,
+          targetsHit: [false, false, false],
+        };
+      };
+
+      const handleAutoTrade = async ({ signalLabel, latest, targets, stop }) => {
+        if (!liveTradeToggle.checked) {
+          return;
+        }
+        if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
+          return;
+        }
+        if (autoTradeState.pending) {
+          return;
+        }
+
+        const position = autoTradeState.position;
+        if (!position) {
+          if (signalLabel === "관망") {
+            return;
+          }
+          const quoteOrderQty = Number(liveQuantityInput.value);
+          if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
+            return;
+          }
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = "자동매매: 진입 주문을 전송합니다...";
+            const side = signalLabel === "숏" ? "SELL" : "BUY";
+            const result = await placeLiveOrder({ side, quoteOrderQty });
+            const { executedQty, avgPrice } = parseOrderMetrics(result);
+            const entryPrice = avgPrice || Number(result?.price || 0);
+            if (executedQty > 0) {
+              lastLiveTrade = { side, entryPrice };
+              updateAutoTradePosition({
+                side,
+                entryPrice,
+                quantity: executedQty,
+                targets,
+                stop,
+              });
+              liveOrderStatus.textContent = "자동매매: 진입 주문이 체결되었습니다.";
+            } else {
+              liveOrderStatus.textContent = "자동매매: 체결 수량을 확인하지 못했습니다.";
+            }
+          } catch (error) {
+            liveOrderStatus.textContent = error instanceof Error ? error.message : "자동매매 실패";
+          } finally {
+            autoTradeState.pending = false;
+          }
+          return;
+        }
+
+        const isLong = position.side === "BUY";
+        const targetHits = position.targetsHit;
+        const targetRatios = [0.5, 0.3, 0.2];
+        const shouldHit = (targetPrice) =>
+          isLong ? latest >= targetPrice : latest <= targetPrice;
+
+        if (
+          position.remainingQty > 0 &&
+          Number.isFinite(position.stop) &&
+          position.stop !== 0 &&
+          shouldHit(position.stop)
+        ) {
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = "자동매매: 손절 주문을 전송합니다...";
+            const exitSide = isLong ? "SELL" : "BUY";
+            await placeLiveOrder({ side: exitSide, quantity: position.remainingQty });
+            autoTradeState.position = null;
+            lastLiveTrade = null;
+            liveOrderStatus.textContent = "자동매매: 손절 주문이 체결되었습니다.";
+          } catch (error) {
+            liveOrderStatus.textContent = error instanceof Error ? error.message : "손절 주문 실패";
+          } finally {
+            autoTradeState.pending = false;
+          }
+          return;
+        }
+
+        for (let i = 0; i < position.targets.length; i += 1) {
+          if (targetHits[i]) {
+            continue;
+          }
+          const targetPrice = position.targets[i];
+          if (!Number.isFinite(targetPrice) || targetPrice === 0) {
+            targetHits[i] = true;
+            continue;
+          }
+          if (!shouldHit(targetPrice)) {
+            continue;
+          }
+          const exitQty = Math.min(
+            position.remainingQty,
+            position.quantity * targetRatios[i]
+          );
+          if (exitQty <= 0) {
+            targetHits[i] = true;
+            continue;
+          }
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문을 전송합니다...`;
+            const exitSide = isLong ? "SELL" : "BUY";
+            await placeLiveOrder({ side: exitSide, quantity: exitQty });
+            position.remainingQty = Math.max(0, position.remainingQty - exitQty);
+            targetHits[i] = true;
+            if (position.remainingQty <= 0) {
+              autoTradeState.position = null;
+              lastLiveTrade = null;
+            }
+            liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문이 체결되었습니다.`;
+          } catch (error) {
+            liveOrderStatus.textContent =
+              error instanceof Error ? error.message : "익절 주문 실패";
+          } finally {
+            autoTradeState.pending = false;
+          }
+          break;
+        }
       };
 
       const updateTradeEnv = async () => {
@@ -960,21 +1118,32 @@
           liveOrderStatus.textContent = "유효한 주문 금액을 입력해 주세요.";
           return;
         }
-        if (tradeStatus.textContent.includes("관망")) {
+        if (direction.textContent === "관망") {
           liveOrderStatus.textContent = "관망 신호에서는 실거래 주문을 실행하지 않습니다.";
           return;
         }
         try {
           const side = direction.textContent === "숏" ? "SELL" : "BUY";
           const result = await placeLiveOrder({ side, quoteOrderQty });
-          const fills = Array.isArray(result?.fills) ? result.fills : [];
-          const fillPrice = fills.length
-            ? fills.reduce((sum, fill) => sum + Number(fill.price || 0), 0) / fills.length
-            : Number(result?.price || 0);
+          const { executedQty, avgPrice } = parseOrderMetrics(result);
+          const fillPrice = avgPrice || Number(result?.price || 0);
           lastLiveTrade = {
             side,
             entryPrice: fillPrice || Number(result?.avgPrice || 0) || null,
           };
+          if (executedQty > 0) {
+            updateAutoTradePosition({
+              side,
+              entryPrice: fillPrice || Number(result?.avgPrice || 0) || null,
+              quantity: executedQty,
+              targets: [
+                Number(target.textContent.replace(/,/g, "")),
+                Number(targetTwo.textContent.replace(/,/g, "")),
+                Number(targetThree.textContent.replace(/,/g, "")),
+              ],
+              stop: Number(stop.textContent.replace(/,/g, "")),
+            });
+          }
           liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
         } catch (error) {
           liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";
@@ -1053,7 +1222,7 @@
       });
 
       let autoRefreshTimer = null;
-      const runAnalysis = () => {
+      const runAnalysis = async () => {
         const prices = parsePrices(pricesInput.value);
 
         if (prices.length < 3) {
@@ -1177,6 +1346,13 @@
           minTargetPct,
         });
         updateLivePnl(latest);
+
+        await handleAutoTrade({
+          signalLabel: direction.textContent,
+          latest,
+          targets: [targetPrice, targetPriceTwo, targetPriceThree],
+          stop: stopPrice,
+        });
 
         const capital = Number(capitalInput.value);
         if (Number.isFinite(capital) && capital > 0) {
