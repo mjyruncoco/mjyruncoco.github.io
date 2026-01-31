@@ -104,6 +104,18 @@
         font-size: 1.4rem;
         font-weight: 700;
       }
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #1f2a3b;
+        font-size: 0.95rem;
+      }
+      .metric span {
+        color: #cbd5f5;
+      }
       .badge {
         display: inline-flex;
         align-items: center;
@@ -130,6 +142,10 @@
       .disclaimer {
         color: #fda4af;
         font-weight: 600;
+      }
+      .note {
+        color: #a5b4fc;
+        font-size: 0.9rem;
       }
       .status-pill {
         display: inline-flex;
@@ -249,6 +265,21 @@
         <div class="card">
           <p class="result" id="signal">데이터를 입력하면 결과가 표시됩니다.</p>
           <p class="badge" id="confidence">신뢰도: -</p>
+          <div class="metric">
+            <span>추천 진입가</span>
+            <strong id="entry">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 (익절)</span>
+            <strong id="target">-</strong>
+          </div>
+          <div class="metric">
+            <span>손절가</span>
+            <strong id="stop">-</strong>
+          </div>
+          <p class="note" id="analysis-note">
+            추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.
+          </p>
           <p id="position" style="margin-top: 16px; color: #cbd5f5;">
             추천 포지션 규모가 여기에 표시됩니다.
           </p>
@@ -258,9 +289,9 @@
       <section class="panel">
         <h2>예측 로직 요약</h2>
         <ul>
-          <li>최근 가격의 평균과 최신 가격의 차이를 이용해 간단한 추세를 계산합니다.</li>
+          <li>단기/장기 이동평균과 RSI를 함께 사용해 추세 방향을 계산합니다.</li>
           <li>상승 추세면 “롱 관찰”, 하락 추세면 “숏 관찰”로 표시합니다.</li>
-          <li>변동성이 낮을 때는 중립 신호로 전환하여 무리한 진입을 피합니다.</li>
+          <li>ATR 기반 변동성으로 목표가/손절가 범위를 제안합니다.</li>
           <li>실시간 시세는 바이낸스 공개 API의 최근 캔들 종가를 사용합니다.</li>
         </ul>
       </section>
@@ -274,6 +305,7 @@
             자동매매는 서버에서 API 키를 안전하게 보관하고 주문을 실행해야 하므로, 브라우저
             단독으로는 처리할 수 없습니다.
           </li>
+          <li>표시되는 진입/익절/손절 가격은 학습용 참고 값이며, 손익을 보장하지 않습니다.</li>
         </ul>
       </section>
     </main>
@@ -321,6 +353,10 @@
       const signal = document.getElementById("signal");
       const confidence = document.getElementById("confidence");
       const position = document.getElementById("position");
+      const entry = document.getElementById("entry");
+      const target = document.getElementById("target");
+      const stop = document.getElementById("stop");
+      const analysisNote = document.getElementById("analysis-note");
       const intervalSelect = document.getElementById("interval");
       const limitInput = document.getElementById("limit");
       const loadMarketButton = document.getElementById("load-market");
@@ -342,12 +378,47 @@
           .map((value) => Number(value))
           .filter((value) => Number.isFinite(value));
 
+      const formatNumber = (value) =>
+        new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+
       const formatUSD = (value) =>
         new Intl.NumberFormat("ko-KR", {
           style: "currency",
           currency: "USD",
           maximumFractionDigits: 2,
         }).format(value);
+
+      const calculateSMA = (values, period) => {
+        if (values.length < period) return null;
+        const slice = values.slice(-period);
+        return slice.reduce((sum, value) => sum + value, 0) / slice.length;
+      };
+
+      const calculateRSI = (values, period = 14) => {
+        if (values.length <= period) return null;
+        let gains = 0;
+        let losses = 0;
+        for (let i = values.length - period; i < values.length; i += 1) {
+          const delta = values[i] - values[i - 1];
+          if (delta >= 0) {
+            gains += delta;
+          } else {
+            losses -= delta;
+          }
+        }
+        if (losses === 0) return 100;
+        const rs = gains / losses;
+        return 100 - 100 / (1 + rs);
+      };
+
+      const calculateATR = (values, period = 14) => {
+        if (values.length <= period) return null;
+        let total = 0;
+        for (let i = values.length - period; i < values.length; i += 1) {
+          total += Math.abs(values[i] - values[i - 1]);
+        }
+        return total / period;
+      };
 
       const setConnectionStatus = ({ text, statusClass }) => {
         connectionStatus.textContent = text;
@@ -454,36 +525,51 @@
           signal.textContent = "최소 3개의 가격을 입력해 주세요.";
           confidence.textContent = "신뢰도: -";
           position.textContent = "추천 포지션 규모가 여기에 표시됩니다.";
+          entry.textContent = "-";
+          target.textContent = "-";
+          stop.textContent = "-";
+          analysisNote.textContent = "추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.";
           return;
         }
 
         const latest = prices[prices.length - 1];
-        const average = prices.reduce((sum, value) => sum + value, 0) / prices.length;
-        const variance =
-          prices.reduce((sum, value) => sum + Math.pow(value - average, 2), 0) /
-          prices.length;
-        const volatility = Math.sqrt(variance);
-        const delta = latest - average;
-        const deltaRatio = delta / average;
+        const shortSMA = calculateSMA(prices, Math.min(7, prices.length));
+        const longSMA = calculateSMA(prices, Math.min(25, prices.length));
+        const rsi = calculateRSI(prices);
+        const atr = calculateATR(prices) || Math.abs(latest * 0.002);
+        const trendBias = shortSMA && longSMA ? shortSMA - longSMA : 0;
 
         let recommendation = "중립";
-        let detail = "변동성이 낮아 관망이 권장됩니다.";
-        let badge = "신뢰도: 낮음";
+        let detail = "추세 신호가 약해 관망이 권장됩니다.";
+        let badge = "신뢰도: 중립";
 
-        if (Math.abs(deltaRatio) > 0.0015) {
-          if (delta > 0) {
-            recommendation = "롱 관찰";
-            detail = "최근 가격이 평균보다 높아 상승 추세로 판단됩니다.";
-          } else {
-            recommendation = "숏 관찰";
-            detail = "최근 가격이 평균보다 낮아 하락 추세로 판단됩니다.";
-          }
-          const confidenceValue = Math.min(90, Math.round(Math.abs(deltaRatio) * 40000));
-          badge = `신뢰도: ${confidenceValue}%`;
+        if (trendBias > 0 && rsi !== null && rsi >= 50) {
+          recommendation = "롱 관찰";
+          detail = "단기 이동평균이 장기 이동평균 위에 있으며 RSI가 50 이상입니다.";
+        } else if (trendBias < 0 && rsi !== null && rsi <= 50) {
+          recommendation = "숏 관찰";
+          detail = "단기 이동평균이 장기 이동평균 아래이며 RSI가 50 이하입니다.";
         }
+
+        const confidenceScore =
+          rsi === null ? 40 : Math.min(90, Math.round(Math.abs(50 - rsi) * 1.8 + 40));
+        badge = `신뢰도: ${confidenceScore}%`;
 
         signal.textContent = `${recommendation} · ${detail}`;
         confidence.textContent = badge;
+        analysisNote.textContent =
+          rsi === null
+            ? "데이터가 부족해 RSI가 계산되지 않았습니다. 더 많은 캔들을 입력해 주세요."
+            : `RSI ${formatNumber(rsi)} · 단기 SMA ${formatNumber(
+                shortSMA ?? latest
+              )} · 장기 SMA ${formatNumber(longSMA ?? latest)}`;
+
+        const entryPrice = latest;
+        const targetPrice = recommendation === "숏 관찰" ? latest - atr * 1.8 : latest + atr * 1.8;
+        const stopPrice = recommendation === "숏 관찰" ? latest + atr * 1.1 : latest - atr * 1.1;
+        entry.textContent = formatNumber(entryPrice);
+        target.textContent = formatNumber(targetPrice);
+        stop.textContent = formatNumber(stopPrice);
 
         const capital = Number(capitalInput.value);
         if (Number.isFinite(capital) && capital > 0) {
@@ -491,11 +577,6 @@
           position.textContent = `추천 포지션 규모: ${formatUSD(allocation)} (총 자본의 15%)`;
         } else {
           position.textContent = "자본 입력 시 추천 포지션 규모를 계산합니다.";
-        }
-
-        if (volatility < average * 0.001) {
-          signal.textContent = "중립 · 변동성이 낮아 관망이 권장됩니다.";
-          confidence.textContent = "신뢰도: 낮음";
         }
       });
     </script>
