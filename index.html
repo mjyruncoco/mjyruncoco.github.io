@@ -429,6 +429,7 @@
             <p><strong>실거래 주문</strong> · 로컬 서버 연동 후에만 동작합니다.</p>
             <button type="button" class="secondary" id="live-order">실거래 주문 실행</button>
             <p class="status-text" id="live-order-status">실거래는 사용자가 직접 실행해야 합니다.</p>
+            <p class="note" id="auto-trade-status">자동매매 상태: 비활성화</p>
           </div>
           <div class="backtest">
             <p><strong>실거래 손익 현황</strong></p>
@@ -558,6 +559,7 @@
       const tf5m = document.getElementById("tf-5m");
       const liveOrderButton = document.getElementById("live-order");
       const liveOrderStatus = document.getElementById("live-order-status");
+      const autoTradeStatus = document.getElementById("auto-trade-status");
       const livePnl = document.getElementById("live-pnl");
       const liveEntry = document.getElementById("live-entry");
       const liveCurrent = document.getElementById("live-current");
@@ -807,6 +809,15 @@
         }
       };
 
+      const setAutoTradeStatus = ({ state, detail }) => {
+        if (!autoTradeStatus) return;
+        let message = `자동매매 상태: ${state}`;
+        if (detail) {
+          message += ` · ${detail}`;
+        }
+        autoTradeStatus.textContent = message;
+      };
+
       const placeLiveOrder = async ({ side, quoteOrderQty, quantity }) => {
         const baseUrl = apiBaseInput.value.trim();
         if (!baseUrl) {
@@ -869,27 +880,33 @@
 
       const handleAutoTrade = async ({ signalLabel, latest, targets, stop }) => {
         if (!liveTradeToggle.checked) {
+          setAutoTradeStatus({ state: "비활성화" });
           return;
         }
         if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
+          setAutoTradeStatus({ state: "대기", detail: "체크 항목 확인 필요" });
           return;
         }
         if (autoTradeState.pending) {
+          setAutoTradeStatus({ state: "진입중", detail: "주문 전송 대기" });
           return;
         }
 
         const position = autoTradeState.position;
         if (!position) {
           if (signalLabel === "관망") {
+            setAutoTradeStatus({ state: "관망중" });
             return;
           }
           const quoteOrderQty = Number(liveQuantityInput.value);
           if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
+            setAutoTradeStatus({ state: "대기", detail: "주문 금액 확인 필요" });
             return;
           }
           try {
             autoTradeState.pending = true;
             liveOrderStatus.textContent = "자동매매: 진입 주문을 전송합니다...";
+            setAutoTradeStatus({ state: "진입중", detail: "진입 주문 전송" });
             const side = signalLabel === "숏" ? "SELL" : "BUY";
             const result = await placeLiveOrder({ side, quoteOrderQty });
             const { executedQty, avgPrice } = parseOrderMetrics(result);
@@ -904,17 +921,21 @@
                 stop,
               });
               liveOrderStatus.textContent = "자동매매: 진입 주문이 체결되었습니다.";
+              setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
             } else {
               liveOrderStatus.textContent = "자동매매: 체결 수량을 확인하지 못했습니다.";
+              setAutoTradeStatus({ state: "대기", detail: "체결 수량 확인 필요" });
             }
           } catch (error) {
             liveOrderStatus.textContent = error instanceof Error ? error.message : "자동매매 실패";
+            setAutoTradeStatus({ state: "대기", detail: "주문 실패" });
           } finally {
             autoTradeState.pending = false;
           }
           return;
         }
 
+        setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
         const isLong = position.side === "BUY";
         const targetHits = position.targetsHit;
         const targetRatios = [0.5, 0.3, 0.2];
@@ -930,13 +951,16 @@
           try {
             autoTradeState.pending = true;
             liveOrderStatus.textContent = "자동매매: 손절 주문을 전송합니다...";
+            setAutoTradeStatus({ state: "손절중", detail: "손절 주문 전송" });
             const exitSide = isLong ? "SELL" : "BUY";
             await placeLiveOrder({ side: exitSide, quantity: position.remainingQty });
             autoTradeState.position = null;
             lastLiveTrade = null;
             liveOrderStatus.textContent = "자동매매: 손절 주문이 체결되었습니다.";
+            setAutoTradeStatus({ state: "대기", detail: "포지션 종료" });
           } catch (error) {
             liveOrderStatus.textContent = error instanceof Error ? error.message : "손절 주문 실패";
+            setAutoTradeStatus({ state: "자동 실행중", detail: "손절 주문 실패" });
           } finally {
             autoTradeState.pending = false;
           }
@@ -966,6 +990,7 @@
           try {
             autoTradeState.pending = true;
             liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문을 전송합니다...`;
+            setAutoTradeStatus({ state: "익절중", detail: `목표 ${i + 1} 익절 주문 전송` });
             const exitSide = isLong ? "SELL" : "BUY";
             await placeLiveOrder({ side: exitSide, quantity: exitQty });
             position.remainingQty = Math.max(0, position.remainingQty - exitQty);
@@ -973,11 +998,13 @@
             if (position.remainingQty <= 0) {
               autoTradeState.position = null;
               lastLiveTrade = null;
+              setAutoTradeStatus({ state: "대기", detail: "포지션 종료" });
             }
             liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문이 체결되었습니다.`;
           } catch (error) {
             liveOrderStatus.textContent =
               error instanceof Error ? error.message : "익절 주문 실패";
+            setAutoTradeStatus({ state: "자동 실행중", detail: "익절 주문 실패" });
           } finally {
             autoTradeState.pending = false;
           }
@@ -1073,6 +1100,10 @@
         updateTradeEnv();
       });
 
+      liveTradeToggle.addEventListener("change", () => {
+        setAutoTradeStatus({ state: liveTradeToggle.checked ? "대기" : "비활성화" });
+      });
+
       testConnectionButton.addEventListener("click", async () => {
         const baseUrl = apiBaseInput.value.trim();
         const key = apiKeyInput.value.trim();
@@ -1107,19 +1138,23 @@
         liveOrderStatus.textContent = "실거래 주문을 준비 중입니다...";
         if (!liveTradeToggle.checked) {
           liveOrderStatus.textContent = "실거래 자동매매 허용을 먼저 체크해 주세요.";
+          setAutoTradeStatus({ state: "비활성화" });
           return;
         }
         if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
           liveOrderStatus.textContent = "실거래 체크 항목을 모두 확인해 주세요.";
+          setAutoTradeStatus({ state: "대기", detail: "체크 항목 확인 필요" });
           return;
         }
         const quoteOrderQty = Number(liveQuantityInput.value);
         if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
           liveOrderStatus.textContent = "유효한 주문 금액을 입력해 주세요.";
+          setAutoTradeStatus({ state: "대기", detail: "주문 금액 확인 필요" });
           return;
         }
         if (direction.textContent === "관망") {
           liveOrderStatus.textContent = "관망 신호에서는 실거래 주문을 실행하지 않습니다.";
+          setAutoTradeStatus({ state: "관망중" });
           return;
         }
         try {
@@ -1143,10 +1178,12 @@
               ],
               stop: Number(stop.textContent.replace(/,/g, "")),
             });
+            setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
           }
           liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
         } catch (error) {
           liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";
+          setAutoTradeStatus({ state: "대기", detail: "주문 실패" });
         }
       });
 
@@ -1212,6 +1249,7 @@
       loadSavedKeys();
       setMode(modeSelect.value);
       applyRiskProfile(riskProfile.value);
+      setAutoTradeStatus({ state: liveTradeToggle.checked ? "대기" : "비활성화" });
       modeSelect.addEventListener("change", () => {
         setMode(modeSelect.value);
         runAnalysis();
