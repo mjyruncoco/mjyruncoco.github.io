@@ -1,1 +1,477 @@
-<scriot type="text/javascript">location.href=https://coco123.mjyruncoco.com";<script>
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTCUSDT 현물 예측 데모</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0b0f1a;
+        color: #f8fafc;
+      }
+      header {
+        padding: 48px 24px 24px;
+        text-align: center;
+        background: radial-gradient(circle at top, #1e293b 0%, #0b0f1a 65%);
+      }
+      header h1 {
+        margin: 0 0 12px;
+        font-size: 2.4rem;
+      }
+      header p {
+        margin: 0 auto;
+        max-width: 640px;
+        color: #cbd5f5;
+        line-height: 1.6;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 20px;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      .panel {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      @media (min-width: 840px) {
+        .grid {
+          grid-template-columns: 1.4fr 1fr;
+        }
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      textarea,
+      input,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 0.95rem;
+      }
+      button {
+        margin-top: 12px;
+        padding: 12px 18px;
+        border-radius: 10px;
+        border: none;
+        font-weight: 600;
+        background: #38bdf8;
+        color: #0b0f1a;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0ea5e9;
+      }
+      button.secondary {
+        background: #1f2937;
+        color: #e2e8f0;
+      }
+      button.secondary:hover {
+        background: #334155;
+      }
+      .card {
+        background: #0b1220;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #1f2a3b;
+      }
+      .result {
+        font-size: 1.4rem;
+        font-weight: 700;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #1e293b;
+        color: #93c5fd;
+        font-size: 0.85rem;
+        margin-top: 8px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 20px;
+        line-height: 1.6;
+        color: #cbd5f5;
+      }
+      footer {
+        text-align: center;
+        padding: 20px 24px 32px;
+        color: #94a3b8;
+        font-size: 0.9rem;
+      }
+      .disclaimer {
+        color: #fda4af;
+        font-weight: 600;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #1f2937;
+        color: #e2e8f0;
+        font-size: 0.85rem;
+      }
+      .status-pill.success {
+        background: #064e3b;
+        color: #6ee7b7;
+      }
+      .status-pill.warning {
+        background: #4c1d95;
+        color: #c4b5fd;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.78);
+        padding: 24px;
+        z-index: 10;
+      }
+      .modal.active {
+        display: flex;
+      }
+      .modal-content {
+        width: min(560px, 100%);
+        background: #0b1220;
+        border-radius: 16px;
+        border: 1px solid #1f2a3b;
+        padding: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .modal-header h2 {
+        margin: 0;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .helper-text {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .switch input {
+        width: auto;
+        accent-color: #38bdf8;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>BTCUSDT 현물 예측 데모</h1>
+      <p>
+        바이낸스 현물 데이터를 바탕으로 한 간단한 추세 예측 대시보드입니다. 실제
+        거래 자동화가 아니라, 가격 흐름을 빠르게 점검하는 학습용 도구로 설계했습니다.
+      </p>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="open-settings">연동 설정</button>
+        <span class="status-pill warning" id="connection-status">연동 상태: 미설정</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel grid">
+        <div>
+          <div class="card" style="margin-bottom: 16px;">
+            <h2 style="margin-top: 0;">실시간 시세 불러오기</h2>
+            <label for="interval">캔들 간격</label>
+            <select id="interval">
+              <option value="1m">1분</option>
+              <option value="5m">5분</option>
+              <option value="15m">15분</option>
+              <option value="1h">1시간</option>
+              <option value="4h">4시간</option>
+              <option value="1d">1일</option>
+            </select>
+            <label for="limit">최근 캔들 수</label>
+            <input id="limit" type="number" min="5" max="200" value="30" />
+            <button type="button" id="load-market">바이낸스 시세 불러오기</button>
+            <p id="market-status" style="margin: 12px 0 0; color: #cbd5f5;">
+              버튼을 누르면 BTCUSDT 최근 시세를 자동으로 채워드립니다.
+            </p>
+          </div>
+          <label for="prices">최근 가격 입력 (쉼표로 구분)</label>
+          <textarea
+            id="prices"
+            rows="6"
+            placeholder="예: 63420, 63480, 63350, 63610, 63820"
+          ></textarea>
+          <label for="capital">가용 USDT (선택)</label>
+          <input id="capital" type="number" min="0" placeholder="예: 500" />
+          <button type="button" id="analyze">예측 확인</button>
+        </div>
+        <div class="card">
+          <p class="result" id="signal">데이터를 입력하면 결과가 표시됩니다.</p>
+          <p class="badge" id="confidence">신뢰도: -</p>
+          <p id="position" style="margin-top: 16px; color: #cbd5f5;">
+            추천 포지션 규모가 여기에 표시됩니다.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>예측 로직 요약</h2>
+        <ul>
+          <li>최근 가격의 평균과 최신 가격의 차이를 이용해 간단한 추세를 계산합니다.</li>
+          <li>상승 추세면 “롱 관찰”, 하락 추세면 “숏 관찰”로 표시합니다.</li>
+          <li>변동성이 낮을 때는 중립 신호로 전환하여 무리한 진입을 피합니다.</li>
+          <li>실시간 시세는 바이낸스 공개 API의 최근 캔들 종가를 사용합니다.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>주의 사항</h2>
+        <ul>
+          <li class="disclaimer">이 도구는 실제 매매를 대신하지 않습니다.</li>
+          <li>실제 주문, 손절/익절 관리, 수수료, 슬리피지는 별도로 고려해야 합니다.</li>
+          <li>
+            자동매매는 서버에서 API 키를 안전하게 보관하고 주문을 실행해야 하므로, 브라우저
+            단독으로는 처리할 수 없습니다.
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>© 2024 BTCUSDT Demo. Educational purpose only.</footer>
+
+    <div class="modal" id="settings-modal" aria-hidden="true">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>바이낸스 연동 설정</h2>
+          <button type="button" class="secondary" id="close-settings">닫기</button>
+        </div>
+        <label for="api-key">API Key</label>
+        <input id="api-key" type="password" placeholder="바이낸스 API Key" />
+        <label for="api-secret">Secret Key</label>
+        <input id="api-secret" type="password" placeholder="바이낸스 Secret Key" />
+        <p class="helper-text">
+          보안상 API 키는 브라우저에 저장하지 않는 것을 권장합니다. 아래 테스트는 서버 연동이
+          준비되었는지 확인하는 용도입니다.
+        </p>
+        <div class="switch">
+          <input type="checkbox" id="auto-trade" disabled />
+          <label for="auto-trade">자동매매 활성화 (서버 연동 후 사용)</label>
+        </div>
+        <p class="helper-text" id="connection-message">
+          API 연동 여부를 테스트하려면 아래 버튼을 눌러주세요.
+        </p>
+        <div class="modal-actions">
+          <button type="button" id="test-connection">연동 테스트</button>
+          <button type="button" class="secondary" id="save-keys">설정 저장</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const analyzeButton = document.getElementById("analyze");
+      const pricesInput = document.getElementById("prices");
+      const capitalInput = document.getElementById("capital");
+      const signal = document.getElementById("signal");
+      const confidence = document.getElementById("confidence");
+      const position = document.getElementById("position");
+      const intervalSelect = document.getElementById("interval");
+      const limitInput = document.getElementById("limit");
+      const loadMarketButton = document.getElementById("load-market");
+      const marketStatus = document.getElementById("market-status");
+      const settingsModal = document.getElementById("settings-modal");
+      const openSettings = document.getElementById("open-settings");
+      const closeSettings = document.getElementById("close-settings");
+      const apiKeyInput = document.getElementById("api-key");
+      const apiSecretInput = document.getElementById("api-secret");
+      const saveKeysButton = document.getElementById("save-keys");
+      const testConnectionButton = document.getElementById("test-connection");
+      const connectionStatus = document.getElementById("connection-status");
+      const connectionMessage = document.getElementById("connection-message");
+
+      const parsePrices = (raw) =>
+        raw
+          .split(/\s*,\s*/)
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+
+      const formatUSD = (value) =>
+        new Intl.NumberFormat("ko-KR", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 2,
+        }).format(value);
+
+      const setConnectionStatus = ({ text, statusClass }) => {
+        connectionStatus.textContent = text;
+        connectionStatus.className = "status-pill";
+        if (statusClass) {
+          connectionStatus.classList.add(statusClass);
+        }
+      };
+
+      const loadSavedKeys = () => {
+        const savedKey = localStorage.getItem("binanceApiKey") || "";
+        const savedSecret = localStorage.getItem("binanceApiSecret") || "";
+        apiKeyInput.value = savedKey;
+        apiSecretInput.value = savedSecret;
+        if (savedKey && savedSecret) {
+          setConnectionStatus({ text: "연동 상태: 키 저장됨", statusClass: "warning" });
+        }
+      };
+
+      openSettings.addEventListener("click", () => {
+        settingsModal.classList.add("active");
+        settingsModal.setAttribute("aria-hidden", "false");
+      });
+
+      closeSettings.addEventListener("click", () => {
+        settingsModal.classList.remove("active");
+        settingsModal.setAttribute("aria-hidden", "true");
+      });
+
+      saveKeysButton.addEventListener("click", () => {
+        localStorage.setItem("binanceApiKey", apiKeyInput.value.trim());
+        localStorage.setItem("binanceApiSecret", apiSecretInput.value.trim());
+        loadSavedKeys();
+        connectionMessage.textContent = "설정이 저장되었습니다. 서버 연동 후 테스트하세요.";
+      });
+
+      testConnectionButton.addEventListener("click", () => {
+        const key = apiKeyInput.value.trim();
+        const secret = apiSecretInput.value.trim();
+        if (!key || !secret) {
+          connectionMessage.textContent = "API Key와 Secret Key를 먼저 입력해 주세요.";
+          setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
+          return;
+        }
+        connectionMessage.textContent =
+          "브라우저만으로는 서명된 요청을 보낼 수 없습니다. 서버 연동이 필요합니다.";
+        setConnectionStatus({ text: "연동 상태: 서버 필요", statusClass: "warning" });
+      });
+
+      const loadMarketPrices = async () => {
+        const interval = intervalSelect.value;
+        const limit = Math.min(200, Math.max(5, Number(limitInput.value) || 30));
+        marketStatus.textContent = "바이낸스 시세를 불러오는 중입니다...";
+
+        try {
+          const response = await fetch(
+            `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
+          );
+          if (!response.ok) {
+            throw new Error("시세를 불러오지 못했습니다.");
+          }
+          const data = await response.json();
+          const closes = data.map((candle) => Number(candle[4])).filter(Number.isFinite);
+          if (closes.length === 0) {
+            throw new Error("유효한 가격 데이터를 찾지 못했습니다.");
+          }
+          pricesInput.value = closes.join(", ");
+          marketStatus.textContent = `최근 ${closes.length}개 캔들 종가를 입력했습니다.`;
+        } catch (error) {
+          marketStatus.textContent =
+            "시세 로딩에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+        }
+      };
+
+      loadMarketButton.addEventListener("click", () => {
+        loadMarketPrices();
+      });
+
+      loadSavedKeys();
+
+      analyzeButton.addEventListener("click", () => {
+        const prices = parsePrices(pricesInput.value);
+
+        if (prices.length < 3) {
+          signal.textContent = "최소 3개의 가격을 입력해 주세요.";
+          confidence.textContent = "신뢰도: -";
+          position.textContent = "추천 포지션 규모가 여기에 표시됩니다.";
+          return;
+        }
+
+        const latest = prices[prices.length - 1];
+        const average = prices.reduce((sum, value) => sum + value, 0) / prices.length;
+        const variance =
+          prices.reduce((sum, value) => sum + Math.pow(value - average, 2), 0) /
+          prices.length;
+        const volatility = Math.sqrt(variance);
+        const delta = latest - average;
+        const deltaRatio = delta / average;
+
+        let recommendation = "중립";
+        let detail = "변동성이 낮아 관망이 권장됩니다.";
+        let badge = "신뢰도: 낮음";
+
+        if (Math.abs(deltaRatio) > 0.0015) {
+          if (delta > 0) {
+            recommendation = "롱 관찰";
+            detail = "최근 가격이 평균보다 높아 상승 추세로 판단됩니다.";
+          } else {
+            recommendation = "숏 관찰";
+            detail = "최근 가격이 평균보다 낮아 하락 추세로 판단됩니다.";
+          }
+          const confidenceValue = Math.min(90, Math.round(Math.abs(deltaRatio) * 40000));
+          badge = `신뢰도: ${confidenceValue}%`;
+        }
+
+        signal.textContent = `${recommendation} · ${detail}`;
+        confidence.textContent = badge;
+
+        const capital = Number(capitalInput.value);
+        if (Number.isFinite(capital) && capital > 0) {
+          const allocation = capital * 0.15;
+          position.textContent = `추천 포지션 규모: ${formatUSD(allocation)} (총 자본의 15%)`;
+        } else {
+          position.textContent = "자본 입력 시 추천 포지션 규모를 계산합니다.";
+        }
+
+        if (volatility < average * 0.001) {
+          signal.textContent = "중립 · 변동성이 낮아 관망이 권장됩니다.";
+          confidence.textContent = "신뢰도: 낮음";
+        }
+      });
+    </script>
+  </body>
+</html>
