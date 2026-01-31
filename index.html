@@ -312,6 +312,8 @@
           <input id="min-target-pct" type="number" min="0.2" step="0.1" value="0.6" />
           <label for="auto-refresh">자동 갱신 간격 (초)</label>
           <input id="auto-refresh" type="number" min="5" step="5" value="30" />
+          <label for="live-quantity">실거래 수량 (BTC)</label>
+          <input id="live-quantity" type="number" min="0.0001" step="0.0001" value="0.001" />
           <button type="button" id="analyze">예측 확인</button>
         </div>
         <div class="card">
@@ -356,6 +358,11 @@
           <div class="backtest" id="backtest">
             <p><strong>간단 백테스트</strong> · 최근 데이터로 추세 신호를 적용한 참고용 결과입니다.</p>
             <p id="backtest-summary">데이터를 입력하면 결과가 표시됩니다.</p>
+          </div>
+          <div class="backtest">
+            <p><strong>실거래 주문</strong> · 로컬 서버 연동 후에만 동작합니다.</p>
+            <button type="button" class="secondary" id="live-order">실거래 주문 실행</button>
+            <p class="status-text" id="live-order-status">실거래는 사용자가 직접 실행해야 합니다.</p>
           </div>
           <p id="position" style="margin-top: 16px; color: #cbd5f5;">
             추천 포지션 규모가 여기에 표시됩니다.
@@ -410,8 +417,8 @@
           <code>http://127.0.0.1:8787/health</code> 응답을 확인하세요.
         </p>
         <div class="switch">
-          <input type="checkbox" id="auto-trade-live" disabled />
-          <label for="auto-trade-live">실거래 자동매매 (서버 연동 후 사용)</label>
+          <input type="checkbox" id="auto-trade-live" />
+          <label for="auto-trade-live">실거래 자동매매 허용 (서버 연동 필요)</label>
         </div>
         <p class="helper-text" id="connection-message">
           API 연동 여부를 테스트하려면 아래 버튼을 눌러주세요.
@@ -440,11 +447,14 @@
       const stopMultiplierInput = document.getElementById("stop-multiplier");
       const minTargetPctInput = document.getElementById("min-target-pct");
       const autoRefreshInput = document.getElementById("auto-refresh");
+      const liveQuantityInput = document.getElementById("live-quantity");
       const autoTradeToggle = document.getElementById("auto-trade");
       const consentToggle = document.getElementById("consent");
       const priceChart = document.getElementById("price-chart");
       const tradeStatus = document.getElementById("trade-status");
       const backtestSummary = document.getElementById("backtest-summary");
+      const liveOrderButton = document.getElementById("live-order");
+      const liveOrderStatus = document.getElementById("live-order-status");
       const intervalSelect = document.getElementById("interval");
       const limitInput = document.getElementById("limit");
       const loadMarketButton = document.getElementById("load-market");
@@ -455,6 +465,7 @@
       const apiBaseInput = document.getElementById("api-base");
       const apiKeyInput = document.getElementById("api-key");
       const apiSecretInput = document.getElementById("api-secret");
+      const liveTradeToggle = document.getElementById("auto-trade-live");
       const saveKeysButton = document.getElementById("save-keys");
       const testConnectionButton = document.getElementById("test-connection");
       const connectionStatus = document.getElementById("connection-status");
@@ -644,6 +655,30 @@
         }
       };
 
+      const placeLiveOrder = async ({ side, quantity }) => {
+        const baseUrl = apiBaseInput.value.trim();
+        if (!baseUrl) {
+          throw new Error("로컬 API 주소가 필요합니다.");
+        }
+        const response = await fetch(`${baseUrl}/order`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            symbol: "BTCUSDT",
+            side,
+            type: "MARKET",
+            quantity,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "주문 요청에 실패했습니다.");
+        }
+        return data;
+      };
+
       const loadSavedKeys = () => {
         const savedBase = localStorage.getItem("binanceApiBase") || "http://127.0.0.1:8787";
         const savedKey = localStorage.getItem("binanceApiKey") || "";
@@ -700,6 +735,34 @@
           setConnectionStatus({ text: "연동 상태: 실패", statusClass: "warning" });
           connectionMessage.textContent =
             "로컬 서버 연결에 실패했습니다. 주소와 상태를 확인해 주세요.";
+        }
+      });
+
+      liveOrderButton.addEventListener("click", async () => {
+        liveOrderStatus.textContent = "실거래 주문을 준비 중입니다...";
+        if (!liveTradeToggle.checked) {
+          liveOrderStatus.textContent = "실거래 자동매매 허용을 먼저 체크해 주세요.";
+          return;
+        }
+        if (!consentToggle.checked) {
+          liveOrderStatus.textContent = "실거래 위험 고지에 동의해야 합니다.";
+          return;
+        }
+        const quantity = Number(liveQuantityInput.value);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          liveOrderStatus.textContent = "유효한 주문 수량을 입력해 주세요.";
+          return;
+        }
+        if (tradeStatus.textContent.includes("관망")) {
+          liveOrderStatus.textContent = "관망 신호에서는 실거래 주문을 실행하지 않습니다.";
+          return;
+        }
+        try {
+          const side = direction.textContent === "숏" ? "SELL" : "BUY";
+          const result = await placeLiveOrder({ side, quantity });
+          liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
+        } catch (error) {
+          liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";
         }
       });
 
