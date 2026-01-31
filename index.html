@@ -322,6 +322,10 @@
             <strong id="entry">-</strong>
           </div>
           <div class="metric">
+            <span>포지션 방향</span>
+            <strong id="direction">-</strong>
+          </div>
+          <div class="metric">
             <span>목표가 (익절)</span>
             <strong id="target">-</strong>
           </div>
@@ -427,6 +431,7 @@
       const confidence = document.getElementById("confidence");
       const position = document.getElementById("position");
       const entry = document.getElementById("entry");
+      const direction = document.getElementById("direction");
       const target = document.getElementById("target");
       const stop = document.getElementById("stop");
       const analysisNote = document.getElementById("analysis-note");
@@ -743,6 +748,7 @@
           confidence.textContent = "신뢰도: -";
           position.textContent = "추천 포지션 규모가 여기에 표시됩니다.";
           entry.textContent = "-";
+          direction.textContent = "-";
           target.textContent = "-";
           stop.textContent = "-";
           analysisNote.textContent = "추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.";
@@ -786,6 +792,8 @@
             : `RSI ${formatNumber(rsi)} · 단기 SMA ${formatNumber(
                 shortSMA ?? latest
               )} · 장기 SMA ${formatNumber(longSMA ?? latest)}`;
+        direction.textContent =
+          recommendation === "롱 관찰" ? "롱" : recommendation === "숏 관찰" ? "숏" : "관망";
 
         const entryPrice = latest;
         const rawTargetDistance = Math.max(atr * targetMultiplier, latest * minTargetPct);
