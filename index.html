@@ -286,13 +286,15 @@
           <h2>바이낸스 연동 설정</h2>
           <button type="button" class="secondary" id="close-settings">닫기</button>
         </div>
+        <label for="api-base">로컬 API 주소</label>
+        <input id="api-base" type="text" placeholder="예: http://127.0.0.1:8787" />
         <label for="api-key">API Key</label>
         <input id="api-key" type="password" placeholder="바이낸스 API Key" />
         <label for="api-secret">Secret Key</label>
         <input id="api-secret" type="password" placeholder="바이낸스 Secret Key" />
         <p class="helper-text">
-          보안상 API 키는 브라우저에 저장하지 않는 것을 권장합니다. 아래 테스트는 서버 연동이
-          준비되었는지 확인하는 용도입니다.
+          보안상 API 키는 브라우저에 저장하지 않는 것을 권장합니다. 아래 테스트는 로컬 PC에서
+          동작하는 서버가 준비되었는지 확인하는 용도입니다.
         </p>
         <div class="switch">
           <input type="checkbox" id="auto-trade" disabled />
@@ -322,6 +324,7 @@
       const settingsModal = document.getElementById("settings-modal");
       const openSettings = document.getElementById("open-settings");
       const closeSettings = document.getElementById("close-settings");
+      const apiBaseInput = document.getElementById("api-base");
       const apiKeyInput = document.getElementById("api-key");
       const apiSecretInput = document.getElementById("api-secret");
       const saveKeysButton = document.getElementById("save-keys");
@@ -351,8 +354,10 @@
       };
 
       const loadSavedKeys = () => {
+        const savedBase = localStorage.getItem("binanceApiBase") || "http://127.0.0.1:8787";
         const savedKey = localStorage.getItem("binanceApiKey") || "";
         const savedSecret = localStorage.getItem("binanceApiSecret") || "";
+        apiBaseInput.value = savedBase;
         apiKeyInput.value = savedKey;
         apiSecretInput.value = savedSecret;
         if (savedKey && savedSecret) {
@@ -371,23 +376,40 @@
       });
 
       saveKeysButton.addEventListener("click", () => {
+        localStorage.setItem("binanceApiBase", apiBaseInput.value.trim());
         localStorage.setItem("binanceApiKey", apiKeyInput.value.trim());
         localStorage.setItem("binanceApiSecret", apiSecretInput.value.trim());
         loadSavedKeys();
-        connectionMessage.textContent = "설정이 저장되었습니다. 서버 연동 후 테스트하세요.";
+        connectionMessage.textContent = "설정이 저장되었습니다. 로컬 서버 연동 후 테스트하세요.";
       });
 
-      testConnectionButton.addEventListener("click", () => {
+      testConnectionButton.addEventListener("click", async () => {
+        const baseUrl = apiBaseInput.value.trim();
         const key = apiKeyInput.value.trim();
         const secret = apiSecretInput.value.trim();
+        if (!baseUrl) {
+          connectionMessage.textContent = "로컬 API 주소를 먼저 입력해 주세요.";
+          setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
+          return;
+        }
         if (!key || !secret) {
           connectionMessage.textContent = "API Key와 Secret Key를 먼저 입력해 주세요.";
           setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
           return;
         }
-        connectionMessage.textContent =
-          "브라우저만으로는 서명된 요청을 보낼 수 없습니다. 서버 연동이 필요합니다.";
-        setConnectionStatus({ text: "연동 상태: 서버 필요", statusClass: "warning" });
+        connectionMessage.textContent = "로컬 서버에 연결을 시도합니다...";
+        try {
+          const response = await fetch(`${baseUrl}/health`);
+          if (!response.ok) {
+            throw new Error("서버 응답이 올바르지 않습니다.");
+          }
+          setConnectionStatus({ text: "연동 상태: 완료", statusClass: "success" });
+          connectionMessage.textContent = "연동 완료! 로컬 서버가 정상 응답합니다.";
+        } catch (error) {
+          setConnectionStatus({ text: "연동 상태: 실패", statusClass: "warning" });
+          connectionMessage.textContent =
+            "로컬 서버 연결에 실패했습니다. 주소와 상태를 확인해 주세요.";
+        }
       });
 
       const loadMarketPrices = async () => {
