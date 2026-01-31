@@ -1,1 +1,1424 @@
-<scriot type="text/javascript">location.href=https://coco123.mjyruncoco.com";<script>
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTCUSDT 현물 예측 데모</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0b0f1a;
+        color: #f8fafc;
+      }
+      header {
+        padding: 48px 24px 24px;
+        text-align: center;
+        background: radial-gradient(circle at top, #1e293b 0%, #0b0f1a 65%);
+      }
+      header h1 {
+        margin: 0 0 12px;
+        font-size: 2.4rem;
+      }
+      header p {
+        margin: 0 auto;
+        max-width: 640px;
+        color: #cbd5f5;
+        line-height: 1.6;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 20px;
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      .panel {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      @media (min-width: 840px) {
+        .grid {
+          grid-template-columns: 1.4fr 1fr;
+        }
+      }
+      @media (min-width: 1200px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      textarea,
+      input,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 0.95rem;
+      }
+      button {
+        margin-top: 12px;
+        padding: 12px 18px;
+        border-radius: 10px;
+        border: none;
+        font-weight: 600;
+        background: #38bdf8;
+        color: #0b0f1a;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0ea5e9;
+      }
+      button.secondary {
+        background: #1f2937;
+        color: #e2e8f0;
+      }
+      button.secondary:hover {
+        background: #334155;
+      }
+      .card {
+        background: #0b1220;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #1f2a3b;
+      }
+      .card h3 {
+        margin: 0 0 12px;
+        font-size: 1.1rem;
+      }
+      .result {
+        font-size: 1.4rem;
+        font-weight: 700;
+      }
+      .chart {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 12px;
+        background: #0f172a;
+        border: 1px solid #1f2a3b;
+      }
+      canvas {
+        width: 100%;
+        height: 220px;
+        display: block;
+      }
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #1f2a3b;
+        font-size: 0.95rem;
+      }
+      .metric span {
+        color: #cbd5f5;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #1e293b;
+        color: #93c5fd;
+        font-size: 0.85rem;
+        margin-top: 8px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 20px;
+        line-height: 1.6;
+        color: #cbd5f5;
+      }
+      footer {
+        text-align: center;
+        padding: 20px 24px 32px;
+        color: #94a3b8;
+        font-size: 0.9rem;
+      }
+      .disclaimer {
+        color: #fda4af;
+        font-weight: 600;
+      }
+      .note {
+        color: #a5b4fc;
+        font-size: 0.9rem;
+      }
+      .status-text {
+        margin-top: 10px;
+        font-size: 0.95rem;
+        color: #cbd5f5;
+      }
+      .backtest {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #1f2a3b;
+        background: #0b1220;
+        font-size: 0.92rem;
+      }
+      .backtest strong {
+        color: #e2e8f0;
+      }
+      .info {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px dashed #334155;
+        background: #0f172a;
+        font-size: 0.9rem;
+        color: #cbd5f5;
+        line-height: 1.6;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #1f2937;
+        color: #e2e8f0;
+        font-size: 0.85rem;
+      }
+      .status-pill.success {
+        background: #064e3b;
+        color: #6ee7b7;
+      }
+      .status-pill.warning {
+        background: #4c1d95;
+        color: #c4b5fd;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.78);
+        padding: 24px;
+        z-index: 10;
+      }
+      .modal.active {
+        display: flex;
+      }
+      .modal-content {
+        width: min(560px, 100%);
+        background: #0b1220;
+        border-radius: 16px;
+        border: 1px solid #1f2a3b;
+        padding: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .modal-header h2 {
+        margin: 0;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .helper-text {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .switch input {
+        width: auto;
+        accent-color: #38bdf8;
+      }
+      .switch-group {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #1f2a3b;
+        background: #0f172a;
+      }
+      .switch-group small {
+        color: #94a3b8;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>BTCUSDT 현물 예측 데모</h1>
+      <p>
+        바이낸스 현물 데이터를 바탕으로 한 간단한 추세 예측 대시보드입니다. 실제
+        거래 자동화가 아니라, 가격 흐름을 빠르게 점검하는 학습용 도구로 설계했습니다.
+      </p>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="open-settings">연동 설정</button>
+        <span class="status-pill warning" id="connection-status">연동 상태: 미설정</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel grid">
+        <div>
+          <div class="card" style="margin-bottom: 16px;">
+            <h2 style="margin-top: 0;">실시간 시세 불러오기</h2>
+            <label for="interval">캔들 간격</label>
+            <select id="interval">
+              <option value="1m">1분</option>
+              <option value="5m">5분</option>
+              <option value="15m">15분</option>
+              <option value="1h">1시간</option>
+              <option value="4h">4시간</option>
+              <option value="1d">1일</option>
+            </select>
+            <label for="limit">최근 캔들 수</label>
+            <input id="limit" type="number" min="5" max="200" value="30" />
+            <button type="button" id="load-market">바이낸스 시세 불러오기</button>
+            <p id="market-status" style="margin: 12px 0 0; color: #cbd5f5;">
+              버튼을 누르면 BTCUSDT 최근 시세를 자동으로 채워드립니다.
+            </p>
+          </div>
+          <label for="prices">최근 가격 입력 (쉼표로 구분)</label>
+          <textarea
+            id="prices"
+            rows="6"
+            placeholder="예: 63420, 63480, 63350, 63610, 63820"
+          ></textarea>
+          <label for="capital">가용 USDT (선택)</label>
+          <input id="capital" type="number" min="0" placeholder="예: 500" />
+          <p class="note">※ 가용 USDT는 테스트 화면에만 사용되며, 실제 잔고와 연동되지 않습니다.</p>
+          <label for="mode">설정 모드</label>
+          <select id="mode">
+            <option value="beginner" selected>초보용</option>
+            <option value="expert">전문가용</option>
+          </select>
+          <div id="beginner-settings" class="card" style="margin-top: 12px;">
+            <h3>초보용 설정</h3>
+            <label for="risk-profile">투자 성격</label>
+            <select id="risk-profile">
+              <option value="safe">안전형</option>
+              <option value="balanced" selected>보통</option>
+              <option value="aggressive">공격형</option>
+            </select>
+          </div>
+          <div id="expert-settings" class="card hidden" style="margin-top: 12px;">
+            <h3>전문가용 설정</h3>
+            <label for="target-multiplier">목표가 배수 (ATR 기준)</label>
+            <input id="target-multiplier" type="number" min="1" step="0.1" value="2.5" />
+            <label for="stop-multiplier">손절 배수 (ATR 기준)</label>
+            <input id="stop-multiplier" type="number" min="0.5" step="0.1" value="1.5" />
+            <label for="min-target-pct">최소 목표 거리 (%)</label>
+            <input id="min-target-pct" type="number" min="0.2" step="0.1" value="0.6" />
+          </div>
+          <label for="auto-refresh">자동 갱신 간격 (초)</label>
+          <input id="auto-refresh" type="number" min="5" step="5" value="30" />
+          <label for="live-quantity">실거래 금액 (USDT)</label>
+          <input id="live-quantity" type="number" min="5" step="1" value="50" />
+          <p class="note">
+            실거래 주문은 로컬 브릿지를 통해 실제 Binance 계정에 전송됩니다. 테스트넷 사용 시
+            로컬 서버의 BINANCE_BASE_URL을 testnet으로 설정하세요.
+          </p>
+          <button type="button" id="analyze">예측 확인</button>
+        </div>
+        <div class="card">
+          <p class="result" id="signal">데이터를 입력하면 결과가 표시됩니다.</p>
+          <p class="badge" id="confidence">신뢰도: -</p>
+          <div class="metric">
+            <span>추천 진입가</span>
+            <strong id="entry">-</strong>
+          </div>
+          <div class="metric">
+            <span>포지션 방향</span>
+            <strong id="direction">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 (익절)</span>
+            <strong id="target">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 2 (추가 익절)</span>
+            <strong id="target-two">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 3 (최종 익절)</span>
+            <strong id="target-three">-</strong>
+          </div>
+          <div class="metric">
+            <span>손절가</span>
+            <strong id="stop">-</strong>
+          </div>
+          <p class="note" id="analysis-note">
+            추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.
+          </p>
+          <div class="switch-group">
+            <div class="switch">
+              <input type="checkbox" id="live-consent" />
+              <label for="live-consent">실거래 위험 고지에 동의합니다</label>
+            </div>
+            <div class="switch">
+              <input type="checkbox" id="live-confirm" />
+              <label for="live-confirm">실거래 주문은 되돌릴 수 없음을 확인했습니다</label>
+            </div>
+            <small>실거래 버튼은 위 두 항목에 동의했을 때만 동작합니다.</small>
+          </div>
+          <div class="chart">
+            <canvas id="price-chart" width="600" height="220"></canvas>
+            <p class="status-text" id="trade-status">
+              가상 진입 기준으로 현재 가격이 목표/손절 중 어디에 가까운지 표시합니다.
+            </p>
+          </div>
+          <div class="backtest">
+            <p><strong>멀티 타임프레임 체크</strong> · 일봉/1시간/15분봉 추세가 같은 방향일 때 5분봉 진입</p>
+            <p class="note" id="tf-status">타임프레임 분석을 로딩 중입니다.</p>
+            <div class="metric">
+              <span>일봉</span>
+              <strong id="tf-1d">-</strong>
+            </div>
+            <div class="metric">
+              <span>1시간</span>
+              <strong id="tf-1h">-</strong>
+            </div>
+            <div class="metric">
+              <span>15분</span>
+              <strong id="tf-15m">-</strong>
+            </div>
+            <div class="metric">
+              <span>5분 (진입)</span>
+              <strong id="tf-5m">-</strong>
+            </div>
+          </div>
+          <div class="backtest" id="backtest">
+            <p><strong>간단 백테스트</strong> · 최근 데이터로 추세 신호를 적용한 참고용 결과입니다.</p>
+            <p id="backtest-summary">데이터를 입력하면 결과가 표시됩니다.</p>
+          </div>
+          <div class="backtest">
+            <p><strong>실거래 주문</strong> · 로컬 서버 연동 후에만 동작합니다.</p>
+            <button type="button" class="secondary" id="live-order">실거래 주문 실행</button>
+            <p class="status-text" id="live-order-status">실거래는 사용자가 직접 실행해야 합니다.</p>
+            <p class="note" id="auto-trade-status">자동매매 상태: 비활성화</p>
+          </div>
+          <div class="backtest">
+            <p><strong>실거래 손익 현황</strong></p>
+            <p id="live-pnl">실거래 주문을 실행하면 손익이 표시됩니다.</p>
+            <p class="note" id="live-entry">진입가: -</p>
+            <p class="note" id="live-current">현재가: -</p>
+            <p class="note" id="live-return">수익률: -</p>
+          </div>
+          <p id="position" style="margin-top: 16px; color: #cbd5f5;">
+            추천 포지션 규모가 여기에 표시됩니다.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>실거래/테스트 안내</h2>
+        <div class="info">
+          <p>
+            이 화면의 분석/백테스트는 학습용입니다. 실거래 버튼은 로컬 서버가 Binance API로
+            주문을 전송할 때만 동작하며, 테스트넷을 사용하면 실제 자금이 아닌 모의 자금으로
+            체결됩니다.
+          </p>
+          <p>
+            “가용 USDT”와 자동매매 시뮬레이션은 화면 내 계산용 값이며, 실제 계정 잔고와는
+            연결되지 않습니다.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>예측 로직 요약</h2>
+        <ul>
+          <li>단기/장기 이동평균과 RSI를 함께 사용해 추세 방향을 계산합니다.</li>
+          <li>상승 추세면 “롱 관찰”, 하락 추세면 “숏 관찰”로 표시합니다.</li>
+          <li>ATR 기반 변동성과 최소 목표 거리 기준으로 목표가/손절가 범위를 제안합니다.</li>
+          <li>실시간 시세는 바이낸스 공개 API의 최근 캔들 종가를 사용합니다.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>주의 사항</h2>
+        <ul>
+          <li class="disclaimer">이 도구는 실제 매매를 대신하지 않습니다.</li>
+          <li>실제 주문, 손절/익절 관리, 수수료, 슬리피지는 별도로 고려해야 합니다.</li>
+          <li>
+            자동매매는 서버에서 API 키를 안전하게 보관하고 주문을 실행해야 하므로, 브라우저
+            단독으로는 처리할 수 없습니다.
+          </li>
+          <li>표시되는 진입/익절/손절 가격은 학습용 참고 값이며, 손익을 보장하지 않습니다.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>© 2024 BTCUSDT Demo. Educational purpose only.</footer>
+
+    <div class="modal" id="settings-modal" aria-hidden="true">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>바이낸스 연동 설정</h2>
+          <button type="button" class="secondary" id="close-settings">닫기</button>
+        </div>
+        <label for="api-base">로컬 API 주소</label>
+        <input id="api-base" type="text" placeholder="예: http://127.0.0.1:8787" />
+        <label for="api-key">API Key</label>
+        <input id="api-key" type="password" placeholder="바이낸스 API Key" />
+        <label for="api-secret">Secret Key</label>
+        <input id="api-secret" type="password" placeholder="바이낸스 Secret Key" />
+        <label for="trade-env">실거래 모드</label>
+        <select id="trade-env">
+          <option value="testnet">테스트넷</option>
+          <option value="live">실거래</option>
+        </select>
+        <p class="helper-text">
+          보안상 API 키는 브라우저에 저장하지 않는 것을 권장합니다. 아래 테스트는 로컬 PC에서
+          동작하는 서버가 준비되었는지 확인하는 용도입니다.
+        </p>
+        <p class="helper-text">
+          로컬 서버 예시: <code>python local_bridge/server.py</code> 실행 후
+          <code>http://127.0.0.1:8787/health</code> 응답을 확인하세요.
+        </p>
+        <div class="switch">
+          <input type="checkbox" id="auto-trade-live" />
+          <label for="auto-trade-live">실거래 자동매매 허용 (서버 연동 필요)</label>
+        </div>
+        <p class="helper-text" id="connection-message">
+          API 연동 여부를 테스트하려면 아래 버튼을 눌러주세요.
+        </p>
+        <div class="modal-actions">
+          <button type="button" id="test-connection">연동 테스트</button>
+          <button type="button" class="secondary" id="save-keys">설정 저장</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const analyzeButton = document.getElementById("analyze");
+      const pricesInput = document.getElementById("prices");
+      const capitalInput = document.getElementById("capital");
+      const signal = document.getElementById("signal");
+      const confidence = document.getElementById("confidence");
+      const position = document.getElementById("position");
+      const entry = document.getElementById("entry");
+      const direction = document.getElementById("direction");
+      const target = document.getElementById("target");
+      const stop = document.getElementById("stop");
+      const targetTwo = document.getElementById("target-two");
+      const targetThree = document.getElementById("target-three");
+      const analysisNote = document.getElementById("analysis-note");
+      const modeSelect = document.getElementById("mode");
+      const riskProfile = document.getElementById("risk-profile");
+      const beginnerSettings = document.getElementById("beginner-settings");
+      const expertSettings = document.getElementById("expert-settings");
+      const targetMultiplierInput = document.getElementById("target-multiplier");
+      const stopMultiplierInput = document.getElementById("stop-multiplier");
+      const minTargetPctInput = document.getElementById("min-target-pct");
+      const autoRefreshInput = document.getElementById("auto-refresh");
+      const liveQuantityInput = document.getElementById("live-quantity");
+      const liveConsentToggle = document.getElementById("live-consent");
+      const liveConfirmToggle = document.getElementById("live-confirm");
+      const priceChart = document.getElementById("price-chart");
+      const tradeStatus = document.getElementById("trade-status");
+      const backtestSummary = document.getElementById("backtest-summary");
+      const tfStatus = document.getElementById("tf-status");
+      const tf1d = document.getElementById("tf-1d");
+      const tf1h = document.getElementById("tf-1h");
+      const tf15m = document.getElementById("tf-15m");
+      const tf5m = document.getElementById("tf-5m");
+      const liveOrderButton = document.getElementById("live-order");
+      const liveOrderStatus = document.getElementById("live-order-status");
+      const autoTradeStatus = document.getElementById("auto-trade-status");
+      const livePnl = document.getElementById("live-pnl");
+      const liveEntry = document.getElementById("live-entry");
+      const liveCurrent = document.getElementById("live-current");
+      const liveReturn = document.getElementById("live-return");
+      const intervalSelect = document.getElementById("interval");
+      const limitInput = document.getElementById("limit");
+      const loadMarketButton = document.getElementById("load-market");
+      const marketStatus = document.getElementById("market-status");
+      const settingsModal = document.getElementById("settings-modal");
+      const openSettings = document.getElementById("open-settings");
+      const closeSettings = document.getElementById("close-settings");
+      const apiBaseInput = document.getElementById("api-base");
+      const apiKeyInput = document.getElementById("api-key");
+      const apiSecretInput = document.getElementById("api-secret");
+      const tradeEnvSelect = document.getElementById("trade-env");
+      const liveTradeToggle = document.getElementById("auto-trade-live");
+      const saveKeysButton = document.getElementById("save-keys");
+      const testConnectionButton = document.getElementById("test-connection");
+      const connectionStatus = document.getElementById("connection-status");
+      const connectionMessage = document.getElementById("connection-message");
+
+      let lastLiveTrade = null;
+      let timeframeSignals = null;
+      let autoTradeState = {
+        position: null,
+        pending: false,
+      };
+
+      const parsePrices = (raw) =>
+        raw
+          .split(/\s*,\s*/)
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+
+      const formatNumber = (value) =>
+        new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+
+      const formatUSD = (value) =>
+        new Intl.NumberFormat("ko-KR", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 2,
+        }).format(value);
+
+      const calculateSMA = (values, period) => {
+        if (values.length < period) return null;
+        const slice = values.slice(-period);
+        return slice.reduce((sum, value) => sum + value, 0) / slice.length;
+      };
+
+      const calculateRSI = (values, period = 14) => {
+        if (values.length <= period) return null;
+        let gains = 0;
+        let losses = 0;
+        for (let i = values.length - period; i < values.length; i += 1) {
+          const delta = values[i] - values[i - 1];
+          if (delta >= 0) {
+            gains += delta;
+          } else {
+            losses -= delta;
+          }
+        }
+        if (losses === 0) return 100;
+        const rs = gains / losses;
+        return 100 - 100 / (1 + rs);
+      };
+
+      const calculateATR = (values, period = 14) => {
+        if (values.length <= period) return null;
+        let total = 0;
+        for (let i = values.length - period; i < values.length; i += 1) {
+          total += Math.abs(values[i] - values[i - 1]);
+        }
+        return total / period;
+      };
+
+      const computeSignal = (prices) => {
+        if (prices.length < 3) {
+          return { recommendation: "중립", rsi: null, shortSMA: null, longSMA: null };
+        }
+        const shortSMA = calculateSMA(prices, Math.min(7, prices.length));
+        const longSMA = calculateSMA(prices, Math.min(25, prices.length));
+        const rsi = calculateRSI(prices);
+        const trendBias = shortSMA && longSMA ? shortSMA - longSMA : 0;
+        let recommendation = "중립";
+        if (trendBias > 0 && rsi !== null && rsi >= 50) {
+          recommendation = "롱";
+        } else if (trendBias < 0 && rsi !== null && rsi <= 50) {
+          recommendation = "숏";
+        }
+        return { recommendation, rsi, shortSMA, longSMA };
+      };
+
+      const applyRiskProfile = (profile) => {
+        if (!riskProfile) return;
+        if (profile === "safe") {
+          targetMultiplierInput.value = "3.0";
+          stopMultiplierInput.value = "1.2";
+          minTargetPctInput.value = "1.0";
+        } else if (profile === "aggressive") {
+          targetMultiplierInput.value = "2.0";
+          stopMultiplierInput.value = "1.3";
+          minTargetPctInput.value = "0.4";
+        } else {
+          targetMultiplierInput.value = "2.5";
+          stopMultiplierInput.value = "1.5";
+          minTargetPctInput.value = "0.6";
+        }
+      };
+
+      const setMode = (mode) => {
+        if (mode === "expert") {
+          beginnerSettings.classList.add("hidden");
+          expertSettings.classList.remove("hidden");
+        } else {
+          beginnerSettings.classList.remove("hidden");
+          expertSettings.classList.add("hidden");
+          applyRiskProfile(riskProfile.value);
+        }
+      };
+
+      const runBacktest = (values, params) => {
+        if (values.length < 30) {
+          return "데이터가 부족해 백테스트를 계산할 수 없습니다.";
+        }
+        let wins = 0;
+        let losses = 0;
+        let open = 0;
+        for (let i = 25; i < values.length - 1; i += 1) {
+          const slice = values.slice(0, i + 1);
+          const shortSMA = calculateSMA(slice, 7);
+          const longSMA = calculateSMA(slice, 25);
+          const rsi = calculateRSI(slice);
+          if (!shortSMA || !longSMA || rsi === null) continue;
+          const trendBias = shortSMA - longSMA;
+          let recommendation = "중립";
+          if (trendBias > 0 && rsi >= 50) {
+            recommendation = "롱 관찰";
+          } else if (trendBias < 0 && rsi <= 50) {
+            recommendation = "숏 관찰";
+          }
+          const confidenceScore = Math.min(95, Math.round(Math.abs(50 - rsi) * 1.8 + 40));
+          if (recommendation === "중립" || confidenceScore < 90) continue;
+
+          const entryPrice = values[i];
+          const atr = calculateATR(slice) || Math.abs(entryPrice * 0.002);
+          const targetDistance = Math.max(atr * params.targetMultiplier, entryPrice * params.minTargetPct);
+          const stopDistance = Math.max(atr * params.stopMultiplier, entryPrice * params.minTargetPct * 0.8);
+
+          let result = "open";
+          for (let j = i + 1; j < values.length; j += 1) {
+            const price = values[j];
+            if (recommendation === "롱 관찰") {
+              if (price >= entryPrice + targetDistance) {
+                result = "win";
+                break;
+              }
+              if (price <= entryPrice - stopDistance) {
+                result = "loss";
+                break;
+              }
+            } else {
+              if (price <= entryPrice - targetDistance) {
+                result = "win";
+                break;
+              }
+              if (price >= entryPrice + stopDistance) {
+                result = "loss";
+                break;
+              }
+            }
+          }
+          if (result === "win") {
+            wins += 1;
+          } else if (result === "loss") {
+            losses += 1;
+          } else {
+            open += 1;
+          }
+        }
+        const total = wins + losses;
+        const winRate = total === 0 ? 0 : Math.round((wins / total) * 100);
+        return `총 거래 ${total}건 · 승 ${wins} · 패 ${losses} · 미결 ${open} · 승률 ${winRate}%`;
+      };
+
+      const drawChart = (values, levels) => {
+        if (!priceChart) return;
+        const context = priceChart.getContext("2d");
+        if (!context) return;
+        const width = priceChart.width;
+        const height = priceChart.height;
+        context.clearRect(0, 0, width, height);
+        if (values.length < 2) return;
+
+        const levelValues = [
+          levels.entry,
+          levels.target,
+          levels.targetTwo,
+          levels.targetThree,
+          levels.stop,
+        ].filter((value) => typeof value === "number");
+        const min = Math.min(...values, ...levelValues);
+        const max = Math.max(...values, ...levelValues);
+        const padding = 12;
+        const scaleX = (index) => padding + (index / (values.length - 1)) * (width - padding * 2);
+        const scaleY = (value) =>
+          height - padding - ((value - min) / (max - min || 1)) * (height - padding * 2);
+
+        context.strokeStyle = "#38bdf8";
+        context.lineWidth = 2;
+        context.beginPath();
+        values.forEach((value, index) => {
+          const x = scaleX(index);
+          const y = scaleY(value);
+          if (index === 0) {
+            context.moveTo(x, y);
+          } else {
+            context.lineTo(x, y);
+          }
+        });
+        context.stroke();
+
+        const drawLevel = (value, color) => {
+          const y = scaleY(value);
+          context.strokeStyle = color;
+          context.lineWidth = 1.5;
+          context.setLineDash([4, 6]);
+          context.beginPath();
+          context.moveTo(padding, y);
+          context.lineTo(width - padding, y);
+          context.stroke();
+          context.setLineDash([]);
+        };
+
+        drawLevel(levels.entry, "#e2e8f0");
+        drawLevel(levels.target, "#22c55e");
+        drawLevel(levels.targetTwo, "#4ade80");
+        drawLevel(levels.targetThree, "#86efac");
+        drawLevel(levels.stop, "#f43f5e");
+      };
+
+      const setConnectionStatus = ({ text, statusClass }) => {
+        connectionStatus.textContent = text;
+        connectionStatus.className = "status-pill";
+        if (statusClass) {
+          connectionStatus.classList.add(statusClass);
+        }
+      };
+
+      const setAutoTradeStatus = ({ state, detail }) => {
+        if (!autoTradeStatus) return;
+        let message = `자동매매 상태: ${state}`;
+        if (detail) {
+          message += ` · ${detail}`;
+        }
+        autoTradeStatus.textContent = message;
+      };
+
+      const placeLiveOrder = async ({ side, quoteOrderQty, quantity }) => {
+        const baseUrl = apiBaseInput.value.trim();
+        if (!baseUrl) {
+          throw new Error("로컬 API 주소가 필요합니다.");
+        }
+        const payload = {
+          symbol: "BTCUSDT",
+          side,
+          type: "MARKET",
+        };
+        if (Number.isFinite(quoteOrderQty) && quoteOrderQty > 0) {
+          payload.quoteOrderQty = quoteOrderQty;
+        }
+        if (Number.isFinite(quantity) && quantity > 0) {
+          payload.quantity = quantity;
+        }
+        if (!payload.quoteOrderQty && !payload.quantity) {
+          throw new Error("주문 금액 또는 수량이 필요합니다.");
+        }
+        const response = await fetch(`${baseUrl}/order`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "주문 요청에 실패했습니다.");
+        }
+        return data;
+      };
+
+      const parseOrderMetrics = (result) => {
+        const fills = Array.isArray(result?.fills) ? result.fills : [];
+        const fillQty = fills.reduce((sum, fill) => sum + Number(fill.qty || 0), 0);
+        const fillQuote = fills.reduce(
+          (sum, fill) => sum + Number(fill.price || 0) * Number(fill.qty || 0),
+          0
+        );
+        const executedQty = fillQty || Number(result?.executedQty || 0);
+        const avgPrice =
+          fillQty > 0
+            ? fillQuote / fillQty
+            : Number(result?.price || result?.avgPrice || 0);
+        return { executedQty, avgPrice };
+      };
+
+      const updateAutoTradePosition = ({ side, entryPrice, quantity, targets, stop }) => {
+        autoTradeState.position = {
+          side,
+          entryPrice,
+          quantity,
+          remainingQty: quantity,
+          targets,
+          stop,
+          targetsHit: [false, false, false],
+        };
+      };
+
+      const handleAutoTrade = async ({ signalLabel, latest, targets, stop }) => {
+        if (!liveTradeToggle.checked) {
+          setAutoTradeStatus({ state: "비활성화" });
+          return;
+        }
+        if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
+          setAutoTradeStatus({ state: "대기", detail: "체크 항목 확인 필요" });
+          return;
+        }
+        if (autoTradeState.pending) {
+          setAutoTradeStatus({ state: "진입중", detail: "주문 전송 대기" });
+          return;
+        }
+
+        const position = autoTradeState.position;
+        if (!position) {
+          if (signalLabel === "관망") {
+            setAutoTradeStatus({ state: "관망중" });
+            return;
+          }
+          const quoteOrderQty = Number(liveQuantityInput.value);
+          if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
+            setAutoTradeStatus({ state: "대기", detail: "주문 금액 확인 필요" });
+            return;
+          }
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = "자동매매: 진입 주문을 전송합니다...";
+            setAutoTradeStatus({ state: "진입중", detail: "진입 주문 전송" });
+            const side = signalLabel === "숏" ? "SELL" : "BUY";
+            const result = await placeLiveOrder({ side, quoteOrderQty });
+            const { executedQty, avgPrice } = parseOrderMetrics(result);
+            const entryPrice = avgPrice || Number(result?.price || 0);
+            if (executedQty > 0) {
+              lastLiveTrade = { side, entryPrice };
+              updateAutoTradePosition({
+                side,
+                entryPrice,
+                quantity: executedQty,
+                targets,
+                stop,
+              });
+              liveOrderStatus.textContent = "자동매매: 진입 주문이 체결되었습니다.";
+              setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
+            } else {
+              liveOrderStatus.textContent = "자동매매: 체결 수량을 확인하지 못했습니다.";
+              setAutoTradeStatus({ state: "대기", detail: "체결 수량 확인 필요" });
+            }
+          } catch (error) {
+            liveOrderStatus.textContent = error instanceof Error ? error.message : "자동매매 실패";
+            setAutoTradeStatus({ state: "대기", detail: "주문 실패" });
+          } finally {
+            autoTradeState.pending = false;
+          }
+          return;
+        }
+
+        setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
+        const isLong = position.side === "BUY";
+        const targetHits = position.targetsHit;
+        const targetRatios = [0.5, 0.3, 0.2];
+        const shouldHit = (targetPrice) =>
+          isLong ? latest >= targetPrice : latest <= targetPrice;
+
+        if (
+          position.remainingQty > 0 &&
+          Number.isFinite(position.stop) &&
+          position.stop !== 0 &&
+          shouldHit(position.stop)
+        ) {
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = "자동매매: 손절 주문을 전송합니다...";
+            setAutoTradeStatus({ state: "손절중", detail: "손절 주문 전송" });
+            const exitSide = isLong ? "SELL" : "BUY";
+            await placeLiveOrder({ side: exitSide, quantity: position.remainingQty });
+            autoTradeState.position = null;
+            lastLiveTrade = null;
+            liveOrderStatus.textContent = "자동매매: 손절 주문이 체결되었습니다.";
+            setAutoTradeStatus({ state: "대기", detail: "포지션 종료" });
+          } catch (error) {
+            liveOrderStatus.textContent = error instanceof Error ? error.message : "손절 주문 실패";
+            setAutoTradeStatus({ state: "자동 실행중", detail: "손절 주문 실패" });
+          } finally {
+            autoTradeState.pending = false;
+          }
+          return;
+        }
+
+        for (let i = 0; i < position.targets.length; i += 1) {
+          if (targetHits[i]) {
+            continue;
+          }
+          const targetPrice = position.targets[i];
+          if (!Number.isFinite(targetPrice) || targetPrice === 0) {
+            targetHits[i] = true;
+            continue;
+          }
+          if (!shouldHit(targetPrice)) {
+            continue;
+          }
+          const exitQty = Math.min(
+            position.remainingQty,
+            position.quantity * targetRatios[i]
+          );
+          if (exitQty <= 0) {
+            targetHits[i] = true;
+            continue;
+          }
+          try {
+            autoTradeState.pending = true;
+            liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문을 전송합니다...`;
+            setAutoTradeStatus({ state: "익절중", detail: `목표 ${i + 1} 익절 주문 전송` });
+            const exitSide = isLong ? "SELL" : "BUY";
+            await placeLiveOrder({ side: exitSide, quantity: exitQty });
+            position.remainingQty = Math.max(0, position.remainingQty - exitQty);
+            targetHits[i] = true;
+            if (position.remainingQty <= 0) {
+              autoTradeState.position = null;
+              lastLiveTrade = null;
+              setAutoTradeStatus({ state: "대기", detail: "포지션 종료" });
+            }
+            liveOrderStatus.textContent = `자동매매: 목표 ${i + 1} 익절 주문이 체결되었습니다.`;
+          } catch (error) {
+            liveOrderStatus.textContent =
+              error instanceof Error ? error.message : "익절 주문 실패";
+            setAutoTradeStatus({ state: "자동 실행중", detail: "익절 주문 실패" });
+          } finally {
+            autoTradeState.pending = false;
+          }
+          break;
+        }
+      };
+
+      const updateTradeEnv = async () => {
+        const baseUrl = apiBaseInput.value.trim();
+        if (!baseUrl) {
+          return;
+        }
+        try {
+          await fetch(`${baseUrl}/config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: tradeEnvSelect.value }),
+          });
+        } catch (error) {
+          // Ignore env update failures; order calls will surface errors.
+        }
+      };
+
+      const updateLivePnl = (latest) => {
+        if (!lastLiveTrade) {
+          livePnl.textContent = "실거래 주문을 실행하면 손익이 표시됩니다.";
+          liveEntry.textContent = "진입가: -";
+          liveCurrent.textContent = "현재가: -";
+          liveReturn.textContent = "수익률: -";
+          return;
+        }
+        const entryPrice = lastLiveTrade.entryPrice;
+        const side = lastLiveTrade.side;
+        if (!entryPrice || !latest) return;
+        const diff = side === "SELL" ? entryPrice - latest : latest - entryPrice;
+        const pnlPct = (diff / entryPrice) * 100;
+        livePnl.textContent = `손익: ${formatNumber(diff)} USDT`;
+        liveEntry.textContent = `진입가: ${formatNumber(entryPrice)}`;
+        liveCurrent.textContent = `현재가: ${formatNumber(latest)}`;
+        liveReturn.textContent = `수익률: ${formatNumber(pnlPct)}%`;
+      };
+
+      const updateTimeframeUI = () => {
+        if (!timeframeSignals) {
+          tfStatus.textContent = "타임프레임 분석을 로딩 중입니다.";
+          return;
+        }
+        tf1d.textContent = timeframeSignals["1d"]?.recommendation || "-";
+        tf1h.textContent = timeframeSignals["1h"]?.recommendation || "-";
+        tf15m.textContent = timeframeSignals["15m"]?.recommendation || "-";
+        tf5m.textContent = timeframeSignals["5m"]?.recommendation || "-";
+        const aligned =
+          timeframeSignals["1d"]?.recommendation &&
+          timeframeSignals["1d"].recommendation !== "중립" &&
+          timeframeSignals["1d"].recommendation === timeframeSignals["1h"]?.recommendation &&
+          timeframeSignals["1d"].recommendation === timeframeSignals["15m"]?.recommendation;
+        tfStatus.textContent = aligned
+          ? "상위 시간대 정합성이 확인되었습니다."
+          : "상위 시간대가 일치하지 않아 진입을 보류합니다.";
+      };
+
+      const loadSavedKeys = () => {
+        const savedBase = localStorage.getItem("binanceApiBase") || "http://127.0.0.1:8787";
+        const savedKey = localStorage.getItem("binanceApiKey") || "";
+        const savedSecret = localStorage.getItem("binanceApiSecret") || "";
+        apiBaseInput.value = savedBase;
+        apiKeyInput.value = savedKey;
+        apiSecretInput.value = savedSecret;
+        if (savedKey && savedSecret) {
+          setConnectionStatus({ text: "연동 상태: 키 저장됨", statusClass: "warning" });
+        }
+      };
+
+      openSettings.addEventListener("click", () => {
+        settingsModal.classList.add("active");
+        settingsModal.setAttribute("aria-hidden", "false");
+      });
+
+      closeSettings.addEventListener("click", () => {
+        settingsModal.classList.remove("active");
+        settingsModal.setAttribute("aria-hidden", "true");
+      });
+
+      saveKeysButton.addEventListener("click", () => {
+        localStorage.setItem("binanceApiBase", apiBaseInput.value.trim());
+        localStorage.setItem("binanceApiKey", apiKeyInput.value.trim());
+        localStorage.setItem("binanceApiSecret", apiSecretInput.value.trim());
+        loadSavedKeys();
+        connectionMessage.textContent = "설정이 저장되었습니다. 로컬 서버 연동 후 테스트하세요.";
+      });
+
+      tradeEnvSelect.addEventListener("change", () => {
+        updateTradeEnv();
+      });
+
+      liveTradeToggle.addEventListener("change", () => {
+        setAutoTradeStatus({ state: liveTradeToggle.checked ? "대기" : "비활성화" });
+      });
+
+      testConnectionButton.addEventListener("click", async () => {
+        const baseUrl = apiBaseInput.value.trim();
+        const key = apiKeyInput.value.trim();
+        const secret = apiSecretInput.value.trim();
+        if (!baseUrl) {
+          connectionMessage.textContent = "로컬 API 주소를 먼저 입력해 주세요.";
+          setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
+          return;
+        }
+        if (!key || !secret) {
+          connectionMessage.textContent = "API Key와 Secret Key를 먼저 입력해 주세요.";
+          setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
+          return;
+        }
+        connectionMessage.textContent = "로컬 서버에 연결을 시도합니다...";
+        try {
+          const response = await fetch(`${baseUrl}/health`);
+          if (!response.ok) {
+            throw new Error("서버 응답이 올바르지 않습니다.");
+          }
+          updateTradeEnv();
+          setConnectionStatus({ text: "연동 상태: 완료", statusClass: "success" });
+          connectionMessage.textContent = "연동 완료! 로컬 서버가 정상 응답합니다.";
+        } catch (error) {
+          setConnectionStatus({ text: "연동 상태: 실패", statusClass: "warning" });
+          connectionMessage.textContent =
+            "로컬 서버 연결에 실패했습니다. 주소와 상태를 확인해 주세요.";
+        }
+      });
+
+      liveOrderButton.addEventListener("click", async () => {
+        liveOrderStatus.textContent = "실거래 주문을 준비 중입니다...";
+        if (!liveTradeToggle.checked) {
+          liveOrderStatus.textContent = "실거래 자동매매 허용을 먼저 체크해 주세요.";
+          setAutoTradeStatus({ state: "비활성화" });
+          return;
+        }
+        if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
+          liveOrderStatus.textContent = "실거래 체크 항목을 모두 확인해 주세요.";
+          setAutoTradeStatus({ state: "대기", detail: "체크 항목 확인 필요" });
+          return;
+        }
+        const quoteOrderQty = Number(liveQuantityInput.value);
+        if (!Number.isFinite(quoteOrderQty) || quoteOrderQty <= 0) {
+          liveOrderStatus.textContent = "유효한 주문 금액을 입력해 주세요.";
+          setAutoTradeStatus({ state: "대기", detail: "주문 금액 확인 필요" });
+          return;
+        }
+        if (direction.textContent === "관망") {
+          liveOrderStatus.textContent = "관망 신호에서는 실거래 주문을 실행하지 않습니다.";
+          setAutoTradeStatus({ state: "관망중" });
+          return;
+        }
+        try {
+          const side = direction.textContent === "숏" ? "SELL" : "BUY";
+          const result = await placeLiveOrder({ side, quoteOrderQty });
+          const { executedQty, avgPrice } = parseOrderMetrics(result);
+          const fillPrice = avgPrice || Number(result?.price || 0);
+          lastLiveTrade = {
+            side,
+            entryPrice: fillPrice || Number(result?.avgPrice || 0) || null,
+          };
+          if (executedQty > 0) {
+            updateAutoTradePosition({
+              side,
+              entryPrice: fillPrice || Number(result?.avgPrice || 0) || null,
+              quantity: executedQty,
+              targets: [
+                Number(target.textContent.replace(/,/g, "")),
+                Number(targetTwo.textContent.replace(/,/g, "")),
+                Number(targetThree.textContent.replace(/,/g, "")),
+              ],
+              stop: Number(stop.textContent.replace(/,/g, "")),
+            });
+            setAutoTradeStatus({ state: "자동 실행중", detail: "포지션 관리 중" });
+          }
+          liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
+        } catch (error) {
+          liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";
+          setAutoTradeStatus({ state: "대기", detail: "주문 실패" });
+        }
+      });
+
+      const loadMarketPrices = async () => {
+        const interval = intervalSelect.value;
+        const limit = Math.min(200, Math.max(5, Number(limitInput.value) || 30));
+        marketStatus.textContent = "바이낸스 시세를 불러오는 중입니다...";
+
+        try {
+          const response = await fetch(
+            `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
+          );
+          if (!response.ok) {
+            throw new Error("시세를 불러오지 못했습니다.");
+          }
+          const data = await response.json();
+          const closes = data.map((candle) => Number(candle[4])).filter(Number.isFinite);
+          if (closes.length === 0) {
+            throw new Error("유효한 가격 데이터를 찾지 못했습니다.");
+          }
+          pricesInput.value = closes.join(", ");
+          marketStatus.textContent = `최근 ${closes.length}개 캔들 종가를 입력했습니다.`;
+        } catch (error) {
+          marketStatus.textContent =
+            "시세 로딩에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+        }
+      };
+
+      const loadMultiTimeframes = async () => {
+        const intervals = ["1d", "1h", "15m", "5m"];
+        const limit = 120;
+        try {
+          const results = {};
+          for (const interval of intervals) {
+            const response = await fetch(
+              `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`
+            );
+            if (!response.ok) {
+              throw new Error("시세를 불러오지 못했습니다.");
+            }
+            const data = await response.json();
+            const closes = data.map((candle) => Number(candle[4])).filter(Number.isFinite);
+            results[interval] = {
+              prices: closes,
+              ...computeSignal(closes),
+            };
+          }
+          timeframeSignals = results;
+          if (results["5m"]?.prices?.length) {
+            pricesInput.value = results["5m"].prices.join(", ");
+          }
+          updateTimeframeUI();
+        } catch (error) {
+          tfStatus.textContent = "타임프레임 데이터를 불러오지 못했습니다.";
+        }
+      };
+
+      loadMarketButton.addEventListener("click", () => {
+        loadMarketPrices();
+        loadMultiTimeframes();
+      });
+
+      loadSavedKeys();
+      setMode(modeSelect.value);
+      applyRiskProfile(riskProfile.value);
+      setAutoTradeStatus({ state: liveTradeToggle.checked ? "대기" : "비활성화" });
+      modeSelect.addEventListener("change", () => {
+        setMode(modeSelect.value);
+        runAnalysis();
+      });
+      riskProfile.addEventListener("change", () => {
+        applyRiskProfile(riskProfile.value);
+        runAnalysis();
+      });
+
+      let autoRefreshTimer = null;
+      const runAnalysis = async () => {
+        const prices = parsePrices(pricesInput.value);
+
+        if (prices.length < 3) {
+          signal.textContent = "최소 3개의 가격을 입력해 주세요.";
+          confidence.textContent = "신뢰도: -";
+          position.textContent = "추천 포지션 규모가 여기에 표시됩니다.";
+          entry.textContent = "-";
+          direction.textContent = "-";
+          target.textContent = "-";
+          targetTwo.textContent = "-";
+          targetThree.textContent = "-";
+          stop.textContent = "-";
+          analysisNote.textContent = "추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.";
+          tradeStatus.textContent =
+            "가상 진입 기준으로 현재 가격이 목표/손절 중 어디에 가까운지 표시합니다.";
+          backtestSummary.textContent = "데이터를 입력하면 결과가 표시됩니다.";
+          return;
+        }
+
+        const latest = prices[prices.length - 1];
+        const shortSMA = calculateSMA(prices, Math.min(7, prices.length));
+        const longSMA = calculateSMA(prices, Math.min(25, prices.length));
+        const rsi = calculateRSI(prices);
+        const atr = calculateATR(prices) || Math.abs(latest * 0.002);
+        const trendBias = shortSMA && longSMA ? shortSMA - longSMA : 0;
+        const targetMultiplier = Number(targetMultiplierInput.value) || 2.5;
+        const stopMultiplier = Number(stopMultiplierInput.value) || 1.5;
+        const minTargetPct = (Number(minTargetPctInput.value) || 0.6) / 100;
+
+        let recommendation = "중립";
+        let detail = "추세 신호가 약해 관망이 권장됩니다.";
+        let badge = "신뢰도: 중립";
+
+        if (trendBias > 0 && rsi !== null && rsi >= 50) {
+          recommendation = "롱 관찰";
+          detail = "단기 이동평균이 장기 이동평균 위에 있으며 RSI가 50 이상입니다.";
+        } else if (trendBias < 0 && rsi !== null && rsi <= 50) {
+          recommendation = "숏 관찰";
+          detail = "단기 이동평균이 장기 이동평균 아래이며 RSI가 50 이하입니다.";
+        }
+
+        if (timeframeSignals) {
+          const highTF = timeframeSignals["1d"]?.recommendation;
+          const midTF = timeframeSignals["1h"]?.recommendation;
+          const lowTF = timeframeSignals["15m"]?.recommendation;
+          const aligned =
+            highTF &&
+            highTF !== "중립" &&
+            highTF === midTF &&
+            highTF === lowTF;
+          if (!aligned) {
+            recommendation = "중립";
+            detail = "상위 시간대가 일치하지 않아 관망이 권장됩니다.";
+          }
+        }
+
+        const confidenceScore =
+          rsi === null ? 40 : Math.min(95, Math.round(Math.abs(50 - rsi) * 1.8 + 40));
+        badge = `신뢰도: ${confidenceScore}%`;
+
+        signal.textContent = `${recommendation} · ${detail}`;
+        confidence.textContent = badge;
+        analysisNote.textContent =
+          rsi === null
+            ? "데이터가 부족해 RSI가 계산되지 않았습니다. 더 많은 캔들을 입력해 주세요."
+            : `RSI ${formatNumber(rsi)} · 단기 SMA ${formatNumber(
+                shortSMA ?? latest
+              )} · 장기 SMA ${formatNumber(longSMA ?? latest)}`;
+        direction.textContent =
+          recommendation === "롱 관찰" ? "롱" : recommendation === "숏 관찰" ? "숏" : "관망";
+
+        const entryPrice = latest;
+        const rawTargetDistance = Math.max(atr * targetMultiplier, latest * minTargetPct);
+        const rawStopDistance = Math.max(atr * stopMultiplier, latest * minTargetPct * 0.8);
+        const targetPrice =
+          recommendation === "숏 관찰" ? latest - rawTargetDistance : latest + rawTargetDistance;
+        const targetPriceTwo =
+          recommendation === "숏 관찰" ? latest - rawTargetDistance * 1.5 : latest + rawTargetDistance * 1.5;
+        const targetPriceThree =
+          recommendation === "숏 관찰" ? latest - rawTargetDistance * 2 : latest + rawTargetDistance * 2;
+        const stopPrice =
+          recommendation === "숏 관찰" ? latest + rawStopDistance : latest - rawStopDistance;
+        entry.textContent = formatNumber(entryPrice);
+        target.textContent = formatNumber(targetPrice);
+        targetTwo.textContent = formatNumber(targetPriceTwo);
+        targetThree.textContent = formatNumber(targetPriceThree);
+        stop.textContent = formatNumber(stopPrice);
+        drawChart(prices, {
+          entry: entryPrice,
+          target: targetPrice,
+          targetTwo: targetPriceTwo,
+          targetThree: targetPriceThree,
+          stop: stopPrice,
+        });
+
+        let statusMessage = "추세가 약해 관망이 권장됩니다.";
+        if (recommendation === "롱 관찰") {
+          if (latest >= targetPrice) {
+            statusMessage =
+              "현재 가격이 목표가 1에 도달했습니다. (50% 익절 + 손절 본절 이동)";
+          } else if (latest <= stopPrice) {
+            statusMessage = "현재 가격이 손절가를 하회했습니다. (손절 영역)";
+          } else {
+            statusMessage = "현재 가격이 목표/손절 사이에 있습니다. (보유 영역)";
+          }
+        } else if (recommendation === "숏 관찰") {
+          if (latest <= targetPrice) {
+            statusMessage =
+              "현재 가격이 목표가 1에 도달했습니다. (50% 익절 + 손절 본절 이동)";
+          } else if (latest >= stopPrice) {
+            statusMessage = "현재 가격이 손절가를 상회했습니다. (손절 영역)";
+          } else {
+            statusMessage = "현재 가격이 목표/손절 사이에 있습니다. (보유 영역)";
+          }
+        }
+
+        tradeStatus.textContent = statusMessage;
+        backtestSummary.textContent = runBacktest(prices, {
+          targetMultiplier,
+          stopMultiplier,
+          minTargetPct,
+        });
+        updateLivePnl(latest);
+
+        await handleAutoTrade({
+          signalLabel: direction.textContent,
+          latest,
+          targets: [targetPrice, targetPriceTwo, targetPriceThree],
+          stop: stopPrice,
+        });
+
+        const capital = Number(capitalInput.value);
+        if (Number.isFinite(capital) && capital > 0) {
+          const allocation = capital * 0.15;
+          position.textContent = `추천 포지션 규모: ${formatUSD(allocation)} (총 자본의 15%)`;
+        } else {
+          position.textContent = "자본 입력 시 추천 포지션 규모를 계산합니다.";
+        }
+      };
+
+      const startAutoRefresh = () => {
+        if (autoRefreshTimer) {
+          clearInterval(autoRefreshTimer);
+        }
+        const intervalSec = Math.max(5, Number(autoRefreshInput.value) || 30);
+        autoRefreshTimer = setInterval(() => {
+          loadMarketPrices();
+          runAnalysis();
+        }, intervalSec * 1000);
+      };
+
+      autoRefreshInput.addEventListener("change", startAutoRefresh);
+
+      analyzeButton.addEventListener("click", () => {
+        runAnalysis();
+      });
+
+      startAutoRefresh();
+    </script>
+  </body>
+</html>
