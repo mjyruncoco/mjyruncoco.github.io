@@ -471,6 +471,11 @@
         <input id="api-key" type="password" placeholder="바이낸스 API Key" />
         <label for="api-secret">Secret Key</label>
         <input id="api-secret" type="password" placeholder="바이낸스 Secret Key" />
+        <label for="trade-env">실거래 모드</label>
+        <select id="trade-env">
+          <option value="testnet">테스트넷</option>
+          <option value="live">실거래</option>
+        </select>
         <p class="helper-text">
           보안상 API 키는 브라우저에 저장하지 않는 것을 권장합니다. 아래 테스트는 로컬 PC에서
           동작하는 서버가 준비되었는지 확인하는 용도입니다.
@@ -537,6 +542,7 @@
       const apiBaseInput = document.getElementById("api-base");
       const apiKeyInput = document.getElementById("api-key");
       const apiSecretInput = document.getElementById("api-secret");
+      const tradeEnvSelect = document.getElementById("trade-env");
       const liveTradeToggle = document.getElementById("auto-trade-live");
       const saveKeysButton = document.getElementById("save-keys");
       const testConnectionButton = document.getElementById("test-connection");
@@ -773,6 +779,22 @@
         return data;
       };
 
+      const updateTradeEnv = async () => {
+        const baseUrl = apiBaseInput.value.trim();
+        if (!baseUrl) {
+          return;
+        }
+        try {
+          await fetch(`${baseUrl}/config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: tradeEnvSelect.value }),
+          });
+        } catch (error) {
+          // Ignore env update failures; order calls will surface errors.
+        }
+      };
+
       const updateLivePnl = (latest) => {
         if (!lastLiveTrade) {
           livePnl.textContent = "실거래 주문을 실행하면 손익이 표시됩니다.";
@@ -822,6 +844,10 @@
         connectionMessage.textContent = "설정이 저장되었습니다. 로컬 서버 연동 후 테스트하세요.";
       });
 
+      tradeEnvSelect.addEventListener("change", () => {
+        updateTradeEnv();
+      });
+
       testConnectionButton.addEventListener("click", async () => {
         const baseUrl = apiBaseInput.value.trim();
         const key = apiKeyInput.value.trim();
@@ -842,6 +868,7 @@
           if (!response.ok) {
             throw new Error("서버 응답이 올바르지 않습니다.");
           }
+          updateTradeEnv();
           setConnectionStatus({ text: "연동 상태: 완료", statusClass: "success" });
           connectionMessage.textContent = "연동 완료! 로컬 서버가 정상 응답합니다.";
         } catch (error) {

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
-import os
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
 import hmac
+import json
+import os
 import time
-from urllib.parse import urlencode
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
-from urllib.parse import urlparse
+
+CONFIG = {
+    "base_url": os.getenv("BINANCE_BASE_URL", "https://api.binance.com"),
+}
 
 
 class LocalBridgeHandler(BaseHTTPRequestHandler):
@@ -28,14 +31,22 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/health":
             self._set_headers(200)
-            self.wfile.write(json.dumps({"status": "ok"}).encode("utf-8"))
+            self.wfile.write(
+                json.dumps({"status": "ok", "base_url": CONFIG["base_url"]}).encode("utf-8")
+            )
+            return
+        if path == "/status":
+            self._set_headers(200)
+            self.wfile.write(
+                json.dumps({"status": "ok", "base_url": CONFIG["base_url"]}).encode("utf-8")
+            )
             return
         self._set_headers(404)
         self.wfile.write(json.dumps({"error": "not_found"}).encode("utf-8"))
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
-        if path != "/order":
+        if path not in {"/order", "/config"}:
             self._set_headers(404)
             self.wfile.write(json.dumps({"error": "not_found"}).encode("utf-8"))
             return
@@ -47,6 +58,21 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             self._set_headers(400)
             self.wfile.write(json.dumps({"error": "invalid_json"}).encode("utf-8"))
+            return
+
+        if path == "/config":
+            mode = payload.get("mode")
+            if mode not in {"testnet", "live"}:
+                self._set_headers(400)
+                self.wfile.write(json.dumps({"error": "invalid_mode"}).encode("utf-8"))
+                return
+            CONFIG["base_url"] = (
+                "https://testnet.binance.vision" if mode == "testnet" else "https://api.binance.com"
+            )
+            self._set_headers(200)
+            self.wfile.write(
+                json.dumps({"status": "ok", "base_url": CONFIG["base_url"]}).encode("utf-8")
+            )
             return
 
         symbol = payload.get("symbol", "BTCUSDT")
@@ -69,7 +95,7 @@ class LocalBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": "missing_quantity"}).encode("utf-8"))
             return
 
-        base_url = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
+        base_url = CONFIG["base_url"]
         endpoint = "/api/v3/order"
         params = {
             "symbol": symbol,

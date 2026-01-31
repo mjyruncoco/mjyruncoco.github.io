@@ -46,3 +46,10 @@ Then the UI can send a POST to `/order` with:
 ```json
 {"symbol": "BTCUSDT", "side": "BUY", "type": "MARKET", "quoteOrderQty": 50}
 ```
+
+## Switch testnet/live at runtime
+You can switch the base URL after the server is running:
+```bash
+curl -X POST http://127.0.0.1:8787/config -H "Content-Type: application/json" -d '{"mode":"testnet"}'
+curl -X POST http://127.0.0.1:8787/config -H "Content-Type: application/json" -d '{"mode":"live"}'
+```
