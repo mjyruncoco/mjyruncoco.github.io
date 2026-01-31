@@ -179,6 +179,16 @@
       .backtest strong {
         color: #e2e8f0;
       }
+      .info {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px dashed #334155;
+        background: #0f172a;
+        font-size: 0.9rem;
+        color: #cbd5f5;
+        line-height: 1.6;
+      }
       .status-pill {
         display: inline-flex;
         align-items: center;
@@ -305,6 +315,7 @@
           ></textarea>
           <label for="capital">가용 USDT (선택)</label>
           <input id="capital" type="number" min="0" placeholder="예: 500" />
+          <p class="note">※ 가용 USDT는 테스트 화면에만 사용되며, 실제 잔고와 연동되지 않습니다.</p>
           <label for="mode">설정 모드</label>
           <select id="mode">
             <option value="beginner" selected>초보용</option>
@@ -332,6 +343,10 @@
           <input id="auto-refresh" type="number" min="5" step="5" value="30" />
           <label for="live-quantity">실거래 금액 (USDT)</label>
           <input id="live-quantity" type="number" min="5" step="1" value="50" />
+          <p class="note">
+            실거래 주문은 로컬 브릿지를 통해 실제 Binance 계정에 전송됩니다. 테스트넷 사용 시
+            로컬 서버의 BINANCE_BASE_URL을 testnet으로 설정하세요.
+          </p>
           <button type="button" id="analyze">예측 확인</button>
         </div>
         <div class="card">
@@ -390,8 +405,30 @@
             <button type="button" class="secondary" id="live-order">실거래 주문 실행</button>
             <p class="status-text" id="live-order-status">실거래는 사용자가 직접 실행해야 합니다.</p>
           </div>
+          <div class="backtest">
+            <p><strong>실거래 손익 현황</strong></p>
+            <p id="live-pnl">실거래 주문을 실행하면 손익이 표시됩니다.</p>
+            <p class="note" id="live-entry">진입가: -</p>
+            <p class="note" id="live-current">현재가: -</p>
+            <p class="note" id="live-return">수익률: -</p>
+          </div>
           <p id="position" style="margin-top: 16px; color: #cbd5f5;">
             추천 포지션 규모가 여기에 표시됩니다.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>실거래/테스트 안내</h2>
+        <div class="info">
+          <p>
+            이 화면의 분석/백테스트는 학습용입니다. 실거래 버튼은 로컬 서버가 Binance API로
+            주문을 전송할 때만 동작하며, 테스트넷을 사용하면 실제 자금이 아닌 모의 자금으로
+            체결됩니다.
+          </p>
+          <p>
+            “가용 USDT”와 자동매매 시뮬레이션은 화면 내 계산용 값이며, 실제 계정 잔고와는
+            연결되지 않습니다.
           </p>
         </div>
       </section>
@@ -486,6 +523,10 @@
       const backtestSummary = document.getElementById("backtest-summary");
       const liveOrderButton = document.getElementById("live-order");
       const liveOrderStatus = document.getElementById("live-order-status");
+      const livePnl = document.getElementById("live-pnl");
+      const liveEntry = document.getElementById("live-entry");
+      const liveCurrent = document.getElementById("live-current");
+      const liveReturn = document.getElementById("live-return");
       const intervalSelect = document.getElementById("interval");
       const limitInput = document.getElementById("limit");
       const loadMarketButton = document.getElementById("load-market");
@@ -501,6 +542,8 @@
       const testConnectionButton = document.getElementById("test-connection");
       const connectionStatus = document.getElementById("connection-status");
       const connectionMessage = document.getElementById("connection-message");
+
+      let lastLiveTrade = null;
 
       const parsePrices = (raw) =>
         raw
@@ -730,6 +773,25 @@
         return data;
       };
 
+      const updateLivePnl = (latest) => {
+        if (!lastLiveTrade) {
+          livePnl.textContent = "실거래 주문을 실행하면 손익이 표시됩니다.";
+          liveEntry.textContent = "진입가: -";
+          liveCurrent.textContent = "현재가: -";
+          liveReturn.textContent = "수익률: -";
+          return;
+        }
+        const entryPrice = lastLiveTrade.entryPrice;
+        const side = lastLiveTrade.side;
+        if (!entryPrice || !latest) return;
+        const diff = side === "SELL" ? entryPrice - latest : latest - entryPrice;
+        const pnlPct = (diff / entryPrice) * 100;
+        livePnl.textContent = `손익: ${formatNumber(diff)} USDT`;
+        liveEntry.textContent = `진입가: ${formatNumber(entryPrice)}`;
+        liveCurrent.textContent = `현재가: ${formatNumber(latest)}`;
+        liveReturn.textContent = `수익률: ${formatNumber(pnlPct)}%`;
+      };
+
       const loadSavedKeys = () => {
         const savedBase = localStorage.getItem("binanceApiBase") || "http://127.0.0.1:8787";
         const savedKey = localStorage.getItem("binanceApiKey") || "";
@@ -811,6 +873,14 @@
         try {
           const side = direction.textContent === "숏" ? "SELL" : "BUY";
           const result = await placeLiveOrder({ side, quoteOrderQty });
+          const fills = Array.isArray(result?.fills) ? result.fills : [];
+          const fillPrice = fills.length
+            ? fills.reduce((sum, fill) => sum + Number(fill.price || 0), 0) / fills.length
+            : Number(result?.price || 0);
+          lastLiveTrade = {
+            side,
+            entryPrice: fillPrice || Number(result?.avgPrice || 0) || null,
+          };
           liveOrderStatus.textContent = `주문 전송 완료: ${result?.status || "OK"}`;
         } catch (error) {
           liveOrderStatus.textContent = error instanceof Error ? error.message : "주문 실패";
@@ -977,6 +1047,7 @@
           stopMultiplier,
           minTargetPct,
         });
+        updateLivePnl(latest);
 
         const capital = Number(capitalInput.value);
         if (Number.isFinite(capital) && capital > 0) {
