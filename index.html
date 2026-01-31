@@ -100,6 +100,10 @@
         padding: 16px;
         border: 1px solid #1f2a3b;
       }
+      .card h3 {
+        margin: 0 0 12px;
+        font-size: 1.1rem;
+      }
       .result {
         font-size: 1.4rem;
         font-weight: 700;
@@ -254,6 +258,9 @@
       .switch-group small {
         color: #94a3b8;
       }
+      .hidden {
+        display: none !important;
+      }
     </style>
   </head>
   <body>
@@ -298,18 +305,29 @@
           ></textarea>
           <label for="capital">가용 USDT (선택)</label>
           <input id="capital" type="number" min="0" placeholder="예: 500" />
-          <label for="risk-profile">투자 성격</label>
-          <select id="risk-profile">
-            <option value="safe">안전형</option>
-            <option value="balanced" selected>보통</option>
-            <option value="aggressive">공격형</option>
+          <label for="mode">설정 모드</label>
+          <select id="mode">
+            <option value="beginner" selected>초보용</option>
+            <option value="expert">전문가용</option>
           </select>
-          <label for="target-multiplier">목표가 배수 (ATR 기준)</label>
-          <input id="target-multiplier" type="number" min="1" step="0.1" value="2.5" />
-          <label for="stop-multiplier">손절 배수 (ATR 기준)</label>
-          <input id="stop-multiplier" type="number" min="0.5" step="0.1" value="1.5" />
-          <label for="min-target-pct">최소 목표 거리 (%)</label>
-          <input id="min-target-pct" type="number" min="0.2" step="0.1" value="0.6" />
+          <div id="beginner-settings" class="card" style="margin-top: 12px;">
+            <h3>초보용 설정</h3>
+            <label for="risk-profile">투자 성격</label>
+            <select id="risk-profile">
+              <option value="safe">안전형</option>
+              <option value="balanced" selected>보통</option>
+              <option value="aggressive">공격형</option>
+            </select>
+          </div>
+          <div id="expert-settings" class="card hidden" style="margin-top: 12px;">
+            <h3>전문가용 설정</h3>
+            <label for="target-multiplier">목표가 배수 (ATR 기준)</label>
+            <input id="target-multiplier" type="number" min="1" step="0.1" value="2.5" />
+            <label for="stop-multiplier">손절 배수 (ATR 기준)</label>
+            <input id="stop-multiplier" type="number" min="0.5" step="0.1" value="1.5" />
+            <label for="min-target-pct">최소 목표 거리 (%)</label>
+            <input id="min-target-pct" type="number" min="0.2" step="0.1" value="0.6" />
+          </div>
           <label for="auto-refresh">자동 갱신 간격 (초)</label>
           <input id="auto-refresh" type="number" min="5" step="5" value="30" />
           <label for="live-quantity">실거래 금액 (USDT)</label>
@@ -330,6 +348,14 @@
           <div class="metric">
             <span>목표가 (익절)</span>
             <strong id="target">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 2 (추가 익절)</span>
+            <strong id="target-two">-</strong>
+          </div>
+          <div class="metric">
+            <span>목표가 3 (최종 익절)</span>
+            <strong id="target-three">-</strong>
           </div>
           <div class="metric">
             <span>손절가</span>
@@ -441,8 +467,13 @@
       const direction = document.getElementById("direction");
       const target = document.getElementById("target");
       const stop = document.getElementById("stop");
+      const targetTwo = document.getElementById("target-two");
+      const targetThree = document.getElementById("target-three");
       const analysisNote = document.getElementById("analysis-note");
+      const modeSelect = document.getElementById("mode");
       const riskProfile = document.getElementById("risk-profile");
+      const beginnerSettings = document.getElementById("beginner-settings");
+      const expertSettings = document.getElementById("expert-settings");
       const targetMultiplierInput = document.getElementById("target-multiplier");
       const stopMultiplierInput = document.getElementById("stop-multiplier");
       const minTargetPctInput = document.getElementById("min-target-pct");
@@ -536,6 +567,17 @@
         }
       };
 
+      const setMode = (mode) => {
+        if (mode === "expert") {
+          beginnerSettings.classList.add("hidden");
+          expertSettings.classList.remove("hidden");
+        } else {
+          beginnerSettings.classList.remove("hidden");
+          expertSettings.classList.add("hidden");
+          applyRiskProfile(riskProfile.value);
+        }
+      };
+
       const runBacktest = (values, params) => {
         if (values.length < 30) {
           return "데이터가 부족해 백테스트를 계산할 수 없습니다.";
@@ -609,8 +651,15 @@
         context.clearRect(0, 0, width, height);
         if (values.length < 2) return;
 
-        const min = Math.min(...values, levels.stop, levels.target);
-        const max = Math.max(...values, levels.stop, levels.target);
+        const levelValues = [
+          levels.entry,
+          levels.target,
+          levels.targetTwo,
+          levels.targetThree,
+          levels.stop,
+        ].filter((value) => typeof value === "number");
+        const min = Math.min(...values, ...levelValues);
+        const max = Math.max(...values, ...levelValues);
         const padding = 12;
         const scaleX = (index) => padding + (index / (values.length - 1)) * (width - padding * 2);
         const scaleY = (value) =>
@@ -644,6 +693,8 @@
 
         drawLevel(levels.entry, "#e2e8f0");
         drawLevel(levels.target, "#22c55e");
+        drawLevel(levels.targetTwo, "#4ade80");
+        drawLevel(levels.targetThree, "#86efac");
         drawLevel(levels.stop, "#f43f5e");
       };
 
@@ -796,7 +847,12 @@
       });
 
       loadSavedKeys();
+      setMode(modeSelect.value);
       applyRiskProfile(riskProfile.value);
+      modeSelect.addEventListener("change", () => {
+        setMode(modeSelect.value);
+        runAnalysis();
+      });
       riskProfile.addEventListener("change", () => {
         applyRiskProfile(riskProfile.value);
         runAnalysis();
@@ -813,6 +869,8 @@
           entry.textContent = "-";
           direction.textContent = "-";
           target.textContent = "-";
+          targetTwo.textContent = "-";
+          targetThree.textContent = "-";
           stop.textContent = "-";
           analysisNote.textContent = "추세, RSI, 변동성(ATR)을 함께 고려한 참고용 계산입니다.";
           tradeStatus.textContent =
@@ -863,17 +921,30 @@
         const rawStopDistance = Math.max(atr * stopMultiplier, latest * minTargetPct * 0.8);
         const targetPrice =
           recommendation === "숏 관찰" ? latest - rawTargetDistance : latest + rawTargetDistance;
+        const targetPriceTwo =
+          recommendation === "숏 관찰" ? latest - rawTargetDistance * 1.5 : latest + rawTargetDistance * 1.5;
+        const targetPriceThree =
+          recommendation === "숏 관찰" ? latest - rawTargetDistance * 2 : latest + rawTargetDistance * 2;
         const stopPrice =
           recommendation === "숏 관찰" ? latest + rawStopDistance : latest - rawStopDistance;
         entry.textContent = formatNumber(entryPrice);
         target.textContent = formatNumber(targetPrice);
+        targetTwo.textContent = formatNumber(targetPriceTwo);
+        targetThree.textContent = formatNumber(targetPriceThree);
         stop.textContent = formatNumber(stopPrice);
-        drawChart(prices, { entry: entryPrice, target: targetPrice, stop: stopPrice });
+        drawChart(prices, {
+          entry: entryPrice,
+          target: targetPrice,
+          targetTwo: targetPriceTwo,
+          targetThree: targetPriceThree,
+          stop: stopPrice,
+        });
 
         let statusMessage = "추세가 약해 관망이 권장됩니다.";
         if (recommendation === "롱 관찰") {
           if (latest >= targetPrice) {
-            statusMessage = "현재 가격이 목표가에 도달했습니다. (익절 영역)";
+            statusMessage =
+              "현재 가격이 목표가 1에 도달했습니다. (50% 익절 + 손절 본절 이동)";
           } else if (latest <= stopPrice) {
             statusMessage = "현재 가격이 손절가를 하회했습니다. (손절 영역)";
           } else {
@@ -881,7 +952,8 @@
           }
         } else if (recommendation === "숏 관찰") {
           if (latest <= targetPrice) {
-            statusMessage = "현재 가격이 목표가에 도달했습니다. (익절 영역)";
+            statusMessage =
+              "현재 가격이 목표가 1에 도달했습니다. (50% 익절 + 손절 본절 이동)";
           } else if (latest >= stopPrice) {
             statusMessage = "현재 가격이 손절가를 상회했습니다. (손절 영역)";
           } else {
