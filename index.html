@@ -37,7 +37,7 @@
         margin-top: 20px;
       }
       main {
-        max-width: 980px;
+        max-width: 1280px;
         margin: 0 auto;
         padding: 32px 24px 64px;
       }
@@ -56,6 +56,11 @@
       @media (min-width: 840px) {
         .grid {
           grid-template-columns: 1.4fr 1fr;
+        }
+      }
+      @media (min-width: 1200px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
         }
       }
       label {
@@ -381,14 +386,14 @@
           </p>
           <div class="switch-group">
             <div class="switch">
-              <input type="checkbox" id="auto-trade" />
-              <label for="auto-trade">자동매매 시뮬레이션 활성화</label>
+              <input type="checkbox" id="live-consent" />
+              <label for="live-consent">실거래 위험 고지에 동의합니다</label>
             </div>
             <div class="switch">
-              <input type="checkbox" id="consent" />
-              <label for="consent">자동매매는 학습용임을 이해했습니다</label>
+              <input type="checkbox" id="live-confirm" />
+              <label for="live-confirm">실거래 주문은 되돌릴 수 없음을 확인했습니다</label>
             </div>
-            <small>신뢰도 90% 이상일 때만 자동 진입을 시뮬레이션합니다.</small>
+            <small>실거래 버튼은 위 두 항목에 동의했을 때만 동작합니다.</small>
           </div>
           <div class="chart">
             <canvas id="price-chart" width="600" height="220"></canvas>
@@ -521,8 +526,8 @@
       const minTargetPctInput = document.getElementById("min-target-pct");
       const autoRefreshInput = document.getElementById("auto-refresh");
       const liveQuantityInput = document.getElementById("live-quantity");
-      const autoTradeToggle = document.getElementById("auto-trade");
-      const consentToggle = document.getElementById("consent");
+      const liveConsentToggle = document.getElementById("live-consent");
+      const liveConfirmToggle = document.getElementById("live-confirm");
       const priceChart = document.getElementById("price-chart");
       const tradeStatus = document.getElementById("trade-status");
       const backtestSummary = document.getElementById("backtest-summary");
@@ -884,8 +889,8 @@
           liveOrderStatus.textContent = "실거래 자동매매 허용을 먼저 체크해 주세요.";
           return;
         }
-        if (!consentToggle.checked) {
-          liveOrderStatus.textContent = "실거래 위험 고지에 동의해야 합니다.";
+        if (!liveConsentToggle.checked || !liveConfirmToggle.checked) {
+          liveOrderStatus.textContent = "실거래 체크 항목을 모두 확인해 주세요.";
           return;
         }
         const quoteOrderQty = Number(liveQuantityInput.value);
@@ -1055,16 +1060,6 @@
             statusMessage = "현재 가격이 손절가를 상회했습니다. (손절 영역)";
           } else {
             statusMessage = "현재 가격이 목표/손절 사이에 있습니다. (보유 영역)";
-          }
-        }
-
-        if (autoTradeToggle.checked) {
-          if (!consentToggle.checked) {
-            statusMessage = "자동매매 동의를 체크해야 시뮬레이션이 동작합니다.";
-          } else if (confidenceScore >= 90 && recommendation !== "중립") {
-            statusMessage = `${statusMessage} (신뢰도 90% 이상 자동 진입 시뮬레이션)`;
-          } else {
-            statusMessage = "신뢰도 90% 이상일 때만 자동 진입을 시뮬레이션합니다.";
           }
         }
 
