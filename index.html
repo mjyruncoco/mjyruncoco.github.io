@@ -276,6 +276,22 @@
       .hidden {
         display: none !important;
       }
+      .status-grid {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .status-label {
+        font-size: 0.95rem;
+        color: #cbd5f5;
+      }
     </style>
   </head>
   <body>
@@ -432,6 +448,20 @@
             <p class="note" id="auto-trade-status">자동매매 상태: 비활성화</p>
           </div>
           <div class="backtest">
+            <p><strong>실거래 연결 상태</strong></p>
+            <div class="status-grid">
+              <div class="status-row">
+                <span class="status-label">API 키 연결</span>
+                <span class="status-pill warning" id="api-connection-pill">연결 필요</span>
+              </div>
+              <div class="status-row">
+                <span class="status-label">자동매매 실행</span>
+                <span class="status-pill warning" id="auto-trade-pill">비활성화</span>
+              </div>
+            </div>
+            <p class="note" id="auto-trade-detail">자동매매 조건 충족 시 실행 상태로 전환됩니다.</p>
+          </div>
+          <div class="backtest">
             <p><strong>실거래 손익 현황</strong></p>
             <p id="live-pnl">실거래 주문을 실행하면 손익이 표시됩니다.</p>
             <p class="note" id="live-entry">진입가: -</p>
@@ -560,6 +590,9 @@
       const liveOrderButton = document.getElementById("live-order");
       const liveOrderStatus = document.getElementById("live-order-status");
       const autoTradeStatus = document.getElementById("auto-trade-status");
+      const apiConnectionPill = document.getElementById("api-connection-pill");
+      const autoTradePill = document.getElementById("auto-trade-pill");
+      const autoTradeDetail = document.getElementById("auto-trade-detail");
       const livePnl = document.getElementById("live-pnl");
       const liveEntry = document.getElementById("live-entry");
       const liveCurrent = document.getElementById("live-current");
@@ -807,6 +840,13 @@
         if (statusClass) {
           connectionStatus.classList.add(statusClass);
         }
+        if (apiConnectionPill) {
+          apiConnectionPill.textContent = text.replace("연동 상태:", "").trim() || text;
+          apiConnectionPill.className = "status-pill";
+          if (statusClass) {
+            apiConnectionPill.classList.add(statusClass);
+          }
+        }
       };
 
       const setAutoTradeStatus = ({ state, detail }) => {
@@ -816,6 +856,20 @@
           message += ` · ${detail}`;
         }
         autoTradeStatus.textContent = message;
+        if (autoTradePill) {
+          autoTradePill.textContent = state;
+          autoTradePill.className = "status-pill";
+          if (state.includes("자동") || state.includes("진입") || state.includes("익절")) {
+            autoTradePill.classList.add("success");
+          } else if (state.includes("비활성")) {
+            autoTradePill.classList.add("warning");
+          }
+        }
+        if (autoTradeDetail) {
+          autoTradeDetail.textContent = detail
+            ? `상세: ${detail}`
+            : "자동매매 조건 충족 시 실행 상태로 전환됩니다.";
+        }
       };
 
       const placeLiveOrder = async ({ side, quoteOrderQty, quantity }) => {
@@ -1075,6 +1129,8 @@
         apiSecretInput.value = savedSecret;
         if (savedKey && savedSecret) {
           setConnectionStatus({ text: "연동 상태: 키 저장됨", statusClass: "warning" });
+        } else {
+          setConnectionStatus({ text: "연동 상태: 미설정", statusClass: "warning" });
         }
       };
 
