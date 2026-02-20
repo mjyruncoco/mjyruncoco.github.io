@@ -5,101 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>국장 익일 매수 자동매매 개발 지시서 + 프로토타입</title>
   <style>
-    :root {
-      --bg: #eef2f5;
-      --card: #ffffff;
-      --line: #ccd5df;
-      --text: #1c2a39;
-      --muted: #47576a;
-      --title: #124a6b;
-      --btn: #1e5c89;
-      --btn2: #0f6f53;
-      --code: #f4f7fa;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
-      line-height: 1.55;
-    }
-    .wrap { max-width: 1140px; margin: 0 auto; padding: 20px; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-    .tab-btn {
-      border: 1px solid var(--line);
-      background: #fff;
-      color: var(--title);
-      font-weight: 700;
-      padding: 9px 14px;
-      border-radius: 9px;
-      cursor: pointer;
-    }
-    .tab-btn.active { background: var(--title); color: #fff; }
-    .page { background: var(--card); border: 1px solid var(--line); }
-    .doc { padding: 24px 24px 32px; }
-    h1 { margin: 0 0 12px; color: var(--title); font-size: 44px; letter-spacing: -0.6px; font-weight: 500; }
-    h2 { margin: 24px 0 10px; color: var(--title); font-size: 40px; letter-spacing: -0.4px; font-weight: 500; }
-    h3 { margin: 20px 0 8px; color: #124a6b; font-size: 26px; }
-    p { margin: 8px 0; font-size: 17px; }
-    .rule { border-top: 2px solid #111; margin: 14px 0; }
-    .box {
-      border: 1px solid var(--line);
-      background: #fbfdff;
-      border-radius: 8px;
-      padding: 12px;
-      margin-top: 8px;
-    }
-    ul, ol { margin: 8px 0 8px 22px; font-size: 16px; }
-    li { margin: 4px 0; }
-    pre {
-      margin: 10px 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--code);
-      overflow: auto;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    :root { --bg:#eef2f5; --card:#fff; --line:#ccd5df; --text:#1c2a39; --muted:#47576a; --title:#124a6b; --btn:#1e5c89; --btn2:#0f6f53; --btn3:#6a4e10; --code:#f4f7fa; }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans KR",system-ui,-apple-system,sans-serif;line-height:1.55}
+    .wrap{max-width:1180px;margin:0 auto;padding:20px}
+    .tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+    .tab-btn{border:1px solid var(--line);background:#fff;color:var(--title);font-weight:700;padding:9px 14px;border-radius:9px;cursor:pointer}
+    .tab-btn.active{background:var(--title);color:#fff}
+    .page{background:var(--card);border:1px solid var(--line)}
+    .doc{padding:24px 24px 32px}
+    h1{margin:0 0 12px;color:var(--title);font-size:42px;letter-spacing:-.6px;font-weight:500}
+    h2{margin:24px 0 10px;color:var(--title);font-size:34px;letter-spacing:-.4px;font-weight:500}
+    h3{margin:20px 0 8px;color:#124a6b;font-size:24px}
+    p{margin:8px 0;font-size:17px}
+    .rule{border-top:2px solid #111;margin:14px 0}
+    .box{border:1px solid var(--line);background:#fbfdff;border-radius:8px;padding:12px;margin-top:8px}
+    ul,ol{margin:8px 0 8px 22px;font-size:16px} li{margin:4px 0}
+    pre{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--code);overflow:auto;font-size:13px;line-height:1.4}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
-    .proto { padding: 20px; }
-    .intro { color: var(--muted); margin: 0 0 12px; }
-    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
-    .panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: #fff; }
-    .panel h4 { margin: 0 0 10px; color: var(--title); font-size: 18px; }
-    .form { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-    label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
-    input, select, textarea, button {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
-      font-size: 14px;
-      color: var(--text);
-      background: #fff;
-    }
-    textarea { min-height: 220px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .btn-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-    button { cursor: pointer; background: var(--btn); color: #fff; font-weight: 600; }
-    #runBtn { background: var(--btn2); }
-    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .m { border: 1px solid var(--line); border-radius: 8px; padding: 9px; }
-    .m .k { color: var(--muted); font-size: 12px; }
-    .m .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { border-bottom: 1px solid var(--line); padding: 7px; text-align: right; }
-    th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2) { text-align: left; }
-    .hidden { display: none; }
-    .foot { margin-top: 14px; color: var(--muted); font-size: 12px; }
-
-    @media (max-width: 980px) {
-      h1 { font-size: 34px; }
-      h2 { font-size: 30px; }
-      .grid { grid-template-columns: 1fr; }
-      .form { grid-template-columns: 1fr; }
-      .metrics { grid-template-columns: 1fr 1fr; }
-    }
+    .proto{padding:20px}
+    .intro{color:var(--muted);margin:0 0 12px}
+    .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
+    .panel{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+    .panel h4{margin:0 0 10px;color:var(--title);font-size:18px}
+    .form{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}
+    input,select,textarea,button{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;color:var(--text);background:#fff}
+    textarea{min-height:200px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .btn-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+    button{cursor:pointer;background:var(--btn);color:#fff;font-weight:600}
+    #runBtn{background:var(--btn2)} #loadApiBtn{background:var(--btn3)}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .m{border:1px solid var(--line);border-radius:8px;padding:9px}
+    .m .k{color:var(--muted);font-size:12px}.m .v{font-size:18px;font-weight:700;margin-top:4px}
+    .table-wrap{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+    table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+    th,td{border-bottom:1px solid var(--line);padding:7px;text-align:right}
+    th:nth-child(1),td:nth-child(1),th:nth-child(2),td:nth-child(2){text-align:left}
+    .hidden{display:none}.foot{margin-top:14px;color:var(--muted);font-size:12px}
+    .status{font-size:12px;color:var(--muted);margin-top:6px}
+    @media (max-width:980px){h1{font-size:32px}h2{font-size:28px}.grid{grid-template-columns:1fr}.form{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
   </style>
 </head>
 <body>
@@ -112,94 +58,44 @@
     <section id="doc" class="page doc">
       <h1>국장 “전일 종가 ≤ 2만원 &amp; 전일 Top50(랭킹)” 익일 매수 자동매매 개발을 위한 Codex 작업지시서</h1>
       <h3>Executive Summary</h3>
-      <p>
-        본 문서는 “전일 종가 2만원 이하”이면서 “전일 기준 순위(Top 50)” 조건을 만족하는 종목을 익일에 매수·매매하는 전략을
-        거래비용(세금·수수료)·슬리피지 포함 기준으로 검증하고, 자동매매 프로그램(데이터 파이프라인→랭킹→신호→백테스트→OMS 시뮬→실계좌 연동)으로
-        구현하기 위한 실무 지시서입니다.
-      </p>
-      <p>
-        정규시장 시간(호가접수 08:30~15:30, 매매거래 09:00~15:30) 기준으로 배치/실시간 경계를 설계하고,
-        시장별 증권거래세 및 유가증권시장 농어촌특별세를 비용모델에 반영합니다.
-      </p>
+      <p>본 문서는 “전일 종가 2만원 이하 + 전일 Top50 랭킹” 전략을 거래비용(세금·수수료)·슬리피지 포함 기준으로 검증하고 자동매매 구조로 옮기기 위한 개발 지시서입니다.</p>
+      <p>정규시장 시간(호가접수 08:30~15:30 / 매매거래 09:00~15:30) 기준으로 배치·실시간 경계를 설계하고, KOSPI/KOSDAQ 시장별 비용을 구분해 반영합니다.</p>
       <div class="rule"></div>
-
       <h2>Codex에 붙여넣을 단계별 작업 지시서</h2>
       <div class="box">
-        <p><strong>[역할]</strong> 너는 Python 기반 퀀트/자동매매 엔지니어다. 아래 요구사항을 충족하는 <code>R&amp;D + 백테스트 + OMS 시뮬 + 실계좌 연동 프레임워크</code>를 생성하라.</p>
         <ul>
-          <li>필터: 전일 종가 ≤ 20000, 전일 랭킹 Top 50</li>
-          <li>랭킹: value/volume/mcap 선택 가능</li>
+          <li>필터: 전일 종가 ≤ 20000, 전일 rank_metric Top 50</li>
+          <li>랭킹: value/volume/mcap 선택형</li>
           <li>진입: open/open_plus_minutes/after_volume_threshold</li>
           <li>청산: close/time_exit/tp_sl/next_close</li>
-          <li>리스크: max_positions, exposure, per_symbol_cap, daily_loss_limit</li>
+          <li>리스크: max_positions, per_symbol_cap, daily_loss_limit</li>
         </ul>
       </div>
-
-      <h3>필수 기능 목록</h3>
+      <h3>필수 기능</h3>
       <ol>
-        <li>데이터 수집/정제 파이프라인</li>
-        <li>랭킹 계산 및 신호 생성</li>
-        <li>백테스트 엔진(비용/슬리피지 플러그인)</li>
-        <li>OMS 시뮬레이터(상태머신·부분체결·타임아웃)</li>
-        <li>KIS 실계좌 어댑터 샘플(토큰/시세/주문/체결)</li>
-        <li>CLI/운영문서/테스트/CI</li>
+        <li>데이터 수집/정제 파이프라인</li><li>랭킹 계산 + 신호 생성</li><li>백테스트 엔진(비용/슬리피지 플러그인)</li>
+        <li>OMS 시뮬레이터(부분체결/타임아웃/재시도)</li><li>KIS 실계좌 어댑터 샘플</li><li>CLI, 테스트, 운영체크리스트</li>
       </ol>
-
-      <h3>권장 디렉터리 구조</h3>
-      <pre><code>project/
-  pyproject.toml
-  README.md
-  configs/
-    backtest.yaml
-    live.yaml
-  src/
-    core/ ...
-    data/ ...
-    backtest/ ...
-    oms/ ...
-    broker/ ...
-    cli/main.py
-  tests/
-  scripts/</code></pre>
-
       <h3>필수 CLI</h3>
       <pre><code>python -m cli.main ingest-eod --config configs/backtest.yaml
 python -m cli.main make-signals --date 2026-02-20 --config configs/backtest.yaml
 python -m cli.main backtest --config configs/backtest.yaml
 python -m cli.main paper-trade --config configs/live.yaml
 python -m cli.main live --config configs/live.yaml</code></pre>
-
-      <h3>Data Contract 핵심</h3>
-      <ul>
-        <li>기본 키: <code>(date, symbol)</code> 또는 <code>(ts, symbol)</code></li>
-        <li>시간대: <code>Asia/Seoul</code></li>
-        <li>포맷: Parquet 우선, CSV 디버그용</li>
-        <li>숫자 타입: 가격/거래대금/시총 int64, 수익률 float64</li>
-      </ul>
-
-      <h3>테스트/CI 요구</h3>
+      <h3>테스트/CI</h3>
       <pre><code>pytest -q
 ruff check .
-# optional
-mypy src/</code></pre>
-
-      <h3>운영 체크리스트</h3>
-      <ul>
-        <li>토큰 만료 전 자동 갱신 + 인증 실패 시 신규주문 차단</li>
-        <li>신호/주문/체결/리스크 JSONL 감사로그 저장</li>
-        <li>레이트리밋·재시도·타임아웃·idempotency 강제</li>
-        <li>장마감 전 미체결 강제청산 정책 + 알림</li>
-      </ul>
-
-      <p class="foot">※ 위 지시서는 질문에서 제공된 장시간/세금/약관 근거를 반영한 구현 스펙 요약입니다.</p>
+mypy src/  # optional</code></pre>
+      <p class="foot">※ 아래 프로토타입 탭에서 API로 데이터 로드 후 종목/매수·매도 계획까지 바로 확인할 수 있습니다.</p>
     </section>
 
     <section id="proto" class="page proto hidden">
-      <p class="intro">아래는 같은 전략을 빠르게 검증하는 브라우저용 백테스트 도구입니다. (D일 필터 → D+1 시가 매수/종가 매도)</p>
+      <p class="intro">전략 검증 도구: D일 필터·랭킹 → D+1 시가 매수 → D+1 종가 매도. API URL에서 데이터 가져오기 지원.</p>
       <div class="grid">
         <div class="panel">
-          <h4>파라미터</h4>
+          <h4>API & 파라미터</h4>
           <div class="form">
+            <label>API URL (JSON/CSV)<input id="apiUrl" value="/api/stocks.json"></label>
             <label>종가 상한 (원)<input id="priceCap" type="number" value="20000"></label>
             <label>Top N<input id="topN" type="number" value="50"></label>
             <label>랭킹<select id="rankMetric"><option value="value">거래대금</option><option value="volume">거래량</option><option value="mcap">시가총액</option></select></label>
@@ -209,15 +105,18 @@ mypy src/</code></pre>
             <label>코스피 농특세 bps<input id="agriKospiBps" type="number" value="15" step="0.1"></label>
             <label>코스닥 거래세 bps<input id="taxKosdaqBps" type="number" value="20" step="0.1"></label>
           </div>
-          <h4 style="margin-top:14px;">CSV 입력</h4>
-          <textarea id="csvInput" placeholder="date,ticker,market,open,close,volume,value,mcap,suspended"></textarea>
           <div class="btn-row">
-            <button id="loadSampleBtn" type="button">샘플 불러오기</button>
+            <button id="loadApiBtn" type="button">API에서 불러오기</button>
+            <button id="loadSampleBtn" type="button">샘플 생성</button>
             <button id="runBtn" type="button">실행</button>
           </div>
+          <div id="apiStatus" class="status">대기 중</div>
+          <h4 style="margin-top:12px;">데이터 입력(CSV)</h4>
+          <textarea id="csvInput" placeholder="date,ticker,name,market,open,close,volume,value,mcap,suspended"></textarea>
         </div>
+
         <div class="panel">
-          <h4>성과</h4>
+          <h4>성과 요약</h4>
           <div class="metrics">
             <div class="m"><div class="k">누적수익률</div><div id="cumRet" class="v">-</div></div>
             <div class="m"><div class="k">평균일수익률</div><div id="avgRet" class="v">-</div></div>
@@ -227,12 +126,19 @@ mypy src/</code></pre>
             <div class="m"><div class="k">승률</div><div id="winRate" class="v">-</div></div>
           </div>
           <h4 style="margin-top:12px;">일별 성과(최근 20)</h4>
-          <div style="max-height:420px; overflow:auto;">
-            <table>
-              <thead><tr><th>거래일</th><th>종목수</th><th>일수익률</th><th>누적</th></tr></thead>
-              <tbody id="resultBody"></tbody>
-            </table>
+          <div class="table-wrap">
+            <table><thead><tr><th>거래일</th><th>종목수</th><th>일수익률</th><th>누적</th></tr></thead><tbody id="resultBody"></tbody></table>
           </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px;">
+        <h4>매수/매도 실행 계획 (최근 30건)</h4>
+        <div class="table-wrap" style="max-height:340px;">
+          <table>
+            <thead><tr><th>신호일</th><th>매매일</th><th>종목</th><th>시장</th><th>매수(시가)</th><th>매도(종가)</th><th>순수익률</th><th>근거</th></tr></thead>
+            <tbody id="planBody"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -240,6 +146,8 @@ mypy src/</code></pre>
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const pct = (x) => `${(x * 100).toFixed(2)}%`;
+    const bps = (x) => Number(x) / 10000;
 
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -258,6 +166,7 @@ mypy src/</code></pre>
         const c = line.split(',').map((x) => x.trim());
         const r = {};
         headers.forEach((h, i) => { r[h] = c[i] ?? ''; });
+        r.name = r.name || r.ticker;
         r.open = Number(r.open); r.close = Number(r.close);
         r.volume = Number(r.volume); r.value = Number(r.value); r.mcap = Number(r.mcap);
         r.suspended = Number(r.suspended || 0);
@@ -265,26 +174,51 @@ mypy src/</code></pre>
       }).filter((r) => r.date && r.ticker && Number.isFinite(r.open) && Number.isFinite(r.close));
     }
 
-    const bps = (x) => Number(x) / 10000;
+    function rowsToCsv(rows) {
+      const header = 'date,ticker,name,market,open,close,volume,value,mcap,suspended';
+      const body = rows.map((r) => [r.date, r.ticker, r.name || r.ticker, r.market, r.open, r.close, r.volume, r.value, r.mcap, r.suspended || 0].join(','));
+      return [header, ...body].join('\n');
+    }
+
+    async function loadFromApi() {
+      const url = $('apiUrl').value.trim();
+      if (!url) return;
+      $('apiStatus').textContent = 'API 호출 중...';
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        let rows = [];
+        if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+          const data = JSON.parse(text);
+          rows = Array.isArray(data) ? data : (Array.isArray(data.rows) ? data.rows : []);
+        } else {
+          rows = parseCsv(text);
+        }
+        if (!rows.length) throw new Error('응답 데이터가 비어 있습니다.');
+        $('csvInput').value = rowsToCsv(rows);
+        $('apiStatus').textContent = `API 로드 성공: ${rows.length} rows`;
+      } catch (e) {
+        $('apiStatus').textContent = `API 로드 실패: ${e.message}`;
+      }
+    }
 
     function byDate(rows) {
       const m = new Map();
-      rows.forEach((r) => {
-        if (!m.has(r.date)) m.set(r.date, []);
-        m.get(r.date).push(r);
-      });
+      rows.forEach((r) => { if (!m.has(r.date)) m.set(r.date, []); m.get(r.date).push(r); });
       return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     }
 
     function run(rows, p) {
       const dd = byDate(rows);
       const daily = [];
-      let tc = 0; let wc = 0;
-      let eq = 1; let peak = 1; let mdd = 0;
+      const plans = [];
+      let tc = 0; let wc = 0; let eq = 1; let peak = 1; let mdd = 0;
 
       for (let i = 0; i < dd.length - 1; i++) {
+        const signalDate = dd[i][0];
         const today = dd[i][1];
-        const nextDate = dd[i + 1][0];
+        const tradeDate = dd[i + 1][0];
         const nextRows = dd[i + 1][1];
         const nextMap = new Map(nextRows.map((r) => [r.ticker, r]));
 
@@ -303,6 +237,18 @@ mypy src/</code></pre>
           const buy = n.open * (1 + p.commission + p.slippage);
           const sell = n.close * (1 - p.commission - p.slippage - tax);
           const ret = (sell - buy) / buy;
+          const reason = `close<=${p.priceCap} & rank<=${p.topN}(${p.rankMetric})`;
+
+          plans.push({
+            signalDate, tradeDate,
+            symbol: `${s.ticker} ${s.name || ''}`.trim(),
+            market: n.market,
+            buyPx: n.open,
+            sellPx: n.close,
+            ret,
+            reason,
+          });
+
           daySum += ret;
           tc += 1;
           if (ret > 0) wc += 1;
@@ -312,11 +258,12 @@ mypy src/</code></pre>
         eq *= (1 + dr);
         peak = Math.max(peak, eq);
         mdd = Math.min(mdd, eq / peak - 1);
-        daily.push({ date: nextDate, picks: picked.length, ret: dr, equity: eq });
+        daily.push({ date: tradeDate, picks: picked.length, ret: dr, equity: eq });
       }
 
       return {
         daily,
+        plans,
         trades: tc,
         winRate: tc ? wc / tc : 0,
         cumRet: eq - 1,
@@ -325,50 +272,64 @@ mypy src/</code></pre>
       };
     }
 
-    const pct = (x) => `${(x * 100).toFixed(2)}%`;
-    function render(r) {
-      $('cumRet').textContent = pct(r.cumRet);
-      $('avgRet').textContent = pct(r.avgRet);
-      $('mdd').textContent = pct(r.mdd);
-      $('days').textContent = String(r.daily.length);
-      $('trades').textContent = String(r.trades);
-      $('winRate').textContent = pct(r.winRate);
-      const tb = $('resultBody');
-      tb.innerHTML = '';
-      r.daily.slice(-20).reverse().forEach((x) => {
+    function render(result) {
+      $('cumRet').textContent = pct(result.cumRet);
+      $('avgRet').textContent = pct(result.avgRet);
+      $('mdd').textContent = pct(result.mdd);
+      $('days').textContent = String(result.daily.length);
+      $('trades').textContent = String(result.trades);
+      $('winRate').textContent = pct(result.winRate);
+
+      const rb = $('resultBody');
+      rb.innerHTML = '';
+      result.daily.slice(-20).reverse().forEach((x) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${x.date}</td><td>${x.picks}</td><td>${pct(x.ret)}</td><td>${pct(x.equity - 1)}</td>`;
-        tb.appendChild(tr);
+        rb.appendChild(tr);
+      });
+
+      const pb = $('planBody');
+      pb.innerHTML = '';
+      result.plans.slice(-30).reverse().forEach((x) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${x.signalDate}</td><td>${x.tradeDate}</td><td>${x.symbol}</td><td>${x.market}</td><td>${x.buyPx.toLocaleString()}</td><td>${x.sellPx.toLocaleString()}</td><td>${pct(x.ret)}</td><td>${x.reason}</td>`;
+        pb.appendChild(tr);
       });
     }
 
-    function sample() {
-      const syms = [['005930','KOSPI'],['000660','KOSPI'],['035420','KOSPI'],['051910','KOSPI'],['068270','KOSDAQ'],['196170','KOSDAQ'],['214150','KOSDAQ']];
-      const rows = ['date,ticker,market,open,close,volume,value,mcap,suspended'];
+    function sampleRows() {
+      const syms = [
+        ['005930','삼성전자','KOSPI'],['000660','SK하이닉스','KOSPI'],['035420','NAVER','KOSPI'],
+        ['068270','셀트리온헬스','KOSDAQ'],['196170','알테오젠','KOSDAQ'],['214150','클래시스','KOSDAQ']
+      ];
+      const rows = [];
       const start = new Date('2025-01-02');
-      for (let d = 0; d < 46; d++) {
+      for (let d = 0; d < 50; d++) {
         const day = new Date(start); day.setDate(start.getDate() + d);
         const date = day.toISOString().slice(0, 10);
-        syms.forEach(([ticker, market], i) => {
-          const base = 3200 + i * 1600;
-          const open = Math.max(700, Math.round(base + Math.sin((d + i) / 4) * 360 + Math.random() * 180));
+        syms.forEach(([ticker, name, market], i) => {
+          const base = 3200 + i * 2200;
+          const open = Math.max(700, Math.round(base + Math.sin((d + i) / 4) * 380 + Math.random() * 180));
           const close = Math.max(700, Math.round(open * (0.97 + Math.random() * 0.09)));
-          const volume = Math.round(180000 + Math.random() * 850000);
+          const volume = Math.round(190000 + Math.random() * 860000);
           const value = close * volume;
-          const mcap = Math.round((28 + i * 12 + Math.random() * 9) * 1_000_000_000);
-          rows.push([date, ticker, market, open, close, volume, value, mcap, 0].join(','));
+          const mcap = Math.round((30 + i * 13 + Math.random() * 8) * 1_000_000_000);
+          rows.push({ date, ticker, name, market, open, close, volume, value, mcap, suspended: 0 });
         });
       }
-      $('csvInput').value = rows.join('\n');
+      return rows;
     }
 
-    $('loadSampleBtn').addEventListener('click', sample);
+    function loadSample() {
+      $('csvInput').value = rowsToCsv(sampleRows());
+      $('apiStatus').textContent = '샘플 데이터 생성 완료';
+    }
+
+    $('loadApiBtn').addEventListener('click', loadFromApi);
+    $('loadSampleBtn').addEventListener('click', loadSample);
     $('runBtn').addEventListener('click', () => {
       const rows = parseCsv($('csvInput').value);
-      if (!rows.length) {
-        alert('CSV 데이터를 확인해주세요.');
-        return;
-      }
+      if (!rows.length) return alert('CSV 데이터를 확인해주세요.');
       const p = {
         priceCap: Number($('priceCap').value),
         topN: Number($('topN').value),
@@ -382,7 +343,7 @@ mypy src/</code></pre>
       render(run(rows, p));
     });
 
-    sample();
+    loadSample();
   </script>
 </body>
 </html>
