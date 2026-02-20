@@ -150,6 +150,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
             <label>코스피 거래세 bps<input id="taxKospiBps" type="number" value="5" step="0.1"></label>
             <label>코스피 농특세 bps<input id="agriKospiBps" type="number" value="15" step="0.1"></label>
             <label>코스닥 거래세 bps<input id="taxKosdaqBps" type="number" value="20" step="0.1"></label>
+            <label>손절 비율 (%)<input id="stopLossPct" type="number" value="3" step="0.1"></label>
           </div>
           <div class="btn-row">
             <button id="loadApiBtn" type="button">API에서 불러오기</button>
@@ -158,7 +159,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
           </div>
           <div id="apiStatus" class="status">대기 중</div>
           <h4 style="margin-top:12px;">데이터 입력(CSV)</h4>
-          <textarea id="csvInput" placeholder="date,ticker,name,market,open,close,volume,value,mcap,suspended"></textarea>
+          <textarea id="csvInput" placeholder="date,ticker,name,market,open,high,low,close,volume,value,mcap,suspended"></textarea>
         </div>
 
         <div class="panel">
@@ -170,6 +171,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
             <div class="m"><div class="k">거래일</div><div id="days" class="v">-</div></div>
             <div class="m"><div class="k">트레이드 수</div><div id="trades" class="v">-</div></div>
             <div class="m"><div class="k">승률</div><div id="winRate" class="v">-</div></div>
+            <div class="m"><div class="k">손절 발생 수</div><div id="stopHits" class="v">-</div></div>
           </div>
           <h4 style="margin-top:12px;">일별 성과(최근 20)</h4>
           <div class="table-wrap">
@@ -182,7 +184,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
         <h4>매수/매도 실행 계획 (최근 30건)</h4>
         <div class="table-wrap" style="max-height:340px;">
           <table>
-            <thead><tr><th>신호일</th><th>매매일</th><th>종목</th><th>시장</th><th>매수(시가)</th><th>매도(종가)</th><th>순수익률</th><th>근거</th></tr></thead>
+            <thead><tr><th>신호일</th><th>매매일</th><th>종목</th><th>시장</th><th>매수(시가)</th><th>손절가</th><th>실제청산가</th><th>청산유형</th><th>순수익률</th><th>근거</th></tr></thead>
             <tbody id="planBody"></tbody>
           </table>
         </div>
@@ -213,7 +215,9 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
         const r = {};
         headers.forEach((h, i) => { r[h] = c[i] ?? ''; });
         r.name = r.name || r.ticker;
-        r.open = Number(r.open); r.close = Number(r.close);
+        r.open = Number(r.open); r.high = Number(r.high); r.low = Number(r.low); r.close = Number(r.close);
+        if (!Number.isFinite(r.high)) r.high = Math.max(r.open, r.close);
+        if (!Number.isFinite(r.low)) r.low = Math.min(r.open, r.close);
         r.volume = Number(r.volume); r.value = Number(r.value); r.mcap = Number(r.mcap);
         r.suspended = Number(r.suspended || 0);
         return r;
@@ -221,8 +225,8 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
     }
 
     function rowsToCsv(rows) {
-      const header = 'date,ticker,name,market,open,close,volume,value,mcap,suspended';
-      const body = rows.map((r) => [r.date, r.ticker, r.name || r.ticker, r.market, r.open, r.close, r.volume, r.value, r.mcap, r.suspended || 0].join(','));
+      const header = 'date,ticker,name,market,open,high,low,close,volume,value,mcap,suspended';
+      const body = rows.map((r) => [r.date, r.ticker, r.name || r.ticker, r.market, r.open, r.high ?? r.open, r.low ?? r.open, r.close, r.volume, r.value, r.mcap, r.suspended || 0].join(','));
       return [header, ...body].join('\n');
     }
 
@@ -259,7 +263,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
       const dd = byDate(rows);
       const daily = [];
       const plans = [];
-      let tc = 0; let wc = 0; let eq = 1; let peak = 1; let mdd = 0;
+      let tc = 0; let wc = 0; let stopHits = 0; let eq = 1; let peak = 1; let mdd = 0;
 
       for (let i = 0; i < dd.length - 1; i++) {
         const signalDate = dd[i][0];
@@ -280,8 +284,11 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
         picked.forEach((s) => {
           const n = nextMap.get(s.ticker);
           const tax = n.market === 'KOSPI' ? p.taxKospi + p.agriKospi : p.taxKosdaq;
+          const stopPx = Math.max(1, Math.round(n.open * (1 - p.stopLossPct)));
+          const stopTriggered = Number.isFinite(n.low) && n.low <= stopPx;
+          const exitPx = stopTriggered ? stopPx : n.close;
           const buy = n.open * (1 + p.commission + p.slippage);
-          const sell = n.close * (1 - p.commission - p.slippage - tax);
+          const sell = exitPx * (1 - p.commission - p.slippage - tax);
           const ret = (sell - buy) / buy;
           const reason = `close<=${p.priceCap} & rank<=${p.topN}(${p.rankMetric})`;
 
@@ -290,10 +297,13 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
             symbol: `${s.ticker} ${s.name || ''}`.trim(),
             market: n.market,
             buyPx: n.open,
-            sellPx: n.close,
+            stopPx,
+            exitPx,
+            exitType: stopTriggered ? 'STOP_LOSS' : 'CLOSE',
             ret,
             reason,
           });
+          if (stopTriggered) stopHits += 1;
 
           daySum += ret;
           tc += 1;
@@ -315,6 +325,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
         cumRet: eq - 1,
         avgRet: daily.length ? daily.reduce((a, b) => a + b.ret, 0) / daily.length : 0,
         mdd,
+        stopHits,
       };
     }
 
@@ -325,6 +336,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
       $('days').textContent = String(result.daily.length);
       $('trades').textContent = String(result.trades);
       $('winRate').textContent = pct(result.winRate);
+      $('stopHits').textContent = String(result.stopHits);
 
       const rb = $('resultBody');
       rb.innerHTML = '';
@@ -338,7 +350,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
       pb.innerHTML = '';
       result.plans.slice(-30).reverse().forEach((x) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${x.signalDate}</td><td>${x.tradeDate}</td><td>${x.symbol}</td><td>${x.market}</td><td>${x.buyPx.toLocaleString()}</td><td>${x.sellPx.toLocaleString()}</td><td>${pct(x.ret)}</td><td>${x.reason}</td>`;
+        tr.innerHTML = `<td>${x.signalDate}</td><td>${x.tradeDate}</td><td>${x.symbol}</td><td>${x.market}</td><td>${x.buyPx.toLocaleString()}</td><td>${x.stopPx.toLocaleString()}</td><td>${x.exitPx.toLocaleString()}</td><td>${x.exitType}</td><td>${pct(x.ret)}</td><td>${x.reason}</td>`;
         pb.appendChild(tr);
       });
     }
@@ -360,7 +372,9 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
           const volume = Math.round(190000 + Math.random() * 860000);
           const value = close * volume;
           const mcap = Math.round((30 + i * 13 + Math.random() * 8) * 1_000_000_000);
-          rows.push({ date, ticker, name, market, open, close, volume, value, mcap, suspended: 0 });
+          const high = Math.max(open, close) + Math.round(Math.random() * 120);
+          const low = Math.max(1, Math.min(open, close) - Math.round(Math.random() * 120));
+          rows.push({ date, ticker, name, market, open, high, low, close, volume, value, mcap, suspended: 0 });
         });
       }
       return rows;
@@ -385,6 +399,7 @@ TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</co
         taxKospi: bps($('taxKospiBps').value),
         agriKospi: bps($('agriKospiBps').value),
         taxKosdaq: bps($('taxKosdaqBps').value),
+        stopLossPct: Number($('stopLossPct').value) / 100,
       };
       render(run(rows, p));
     });
