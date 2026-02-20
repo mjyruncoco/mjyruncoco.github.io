@@ -86,6 +86,52 @@ python -m cli.main live --config configs/live.yaml</code></pre>
       <pre><code>pytest -q
 ruff check .
 mypy src/  # optional</code></pre>
+      <h3>범위와 핵심 가정</h3>
+      <ul>
+        <li>정보 시점: 전일 확정(EOD) 데이터, 집행 시점: 익일 장중(09:00~15:30)</li>
+        <li>정규시장 시간표(호가접수 08:30~15:30 / 매매 09:00~15:30) 기준 배치·실시간 분리</li>
+        <li>2만원 경계(틱 변화) 민감도를 반영한 tick_based 슬리피지 테스트 필수</li>
+      </ul>
+
+      <h3>데이터 계약(요약)</h3>
+      <pre><code>EOD: date,symbol,market,open,high,low,close,volume,value,market_cap
+RANK: date,symbol,rank_metric,metric_value,rank,eligible_price
+SIGNAL: trade_date,symbol,side,planned_entry,planned_exit,reason
+TRADES: entry_ts/px,exit_ts/px,qty,gross_pnl,net_pnl,commission,tax,slippage</code></pre>
+
+      <h3>백테스트/운영 시 필수 반영 항목</h3>
+      <ul>
+        <li>세금 분기: KOSPI(거래세 + 농특세), KOSDAQ(거래세), KONEX(거래세)</li>
+        <li>슬리피지: fixed_bps + tick_based(경계값 단위테스트 포함)</li>
+        <li>체결 제도: 단일가/접속매매, VI 구간 지연 가능성 로깅</li>
+        <li>운영 리스크: API 제한, 미체결, 타임아웃, safe stop 정책</li>
+      </ul>
+
+      <h3>Codex 단계별 구현 지시 (추가)</h3>
+      <ol>
+        <li>raw→curated Parquet 정제 + 스키마 검증</li>
+        <li>rank_metric(value/volume/mcap) 결정론 랭킹 구현</li>
+        <li>close&lt;=20000 &amp; rank&lt;=50 신호 생성 및 익일 계획 고정 저장</li>
+        <li>비용모델(commission/tax/slippage) 분리 플러그인화</li>
+        <li>OMS 시뮬레이터(MKT/LMT/MLMT, 부분체결, 타임아웃, 재시도)</li>
+        <li>KIS 어댑터(토큰 발급·갱신 + 시세/주문/체결/잔고 최소 루프)</li>
+      </ol>
+
+      <h3>추가 심화 질문</h3>
+      <ol>
+        <li>rank_metric(value/volume/mcap) 중 어떤 정의가 워크포워드에서 가장 일관적인지?</li>
+        <li>2만원 경계 구간에서 tick_based 슬리피지 파라미터를 실거래 로그로 어떻게 보정할지?</li>
+        <li>VI/미체결/API 제한 반영 시 실전 전환 기준(Sharpe/MDD/오류율)을 어떻게 계량화할지?</li>
+      </ol>
+
+      <h3>참고 링크</h3>
+      <ul>
+        <li><a href="https://data.krx.co.kr/contents/MDC/EASY/ranking/MDCEASY016.jsp" target="_blank" rel="noopener noreferrer">KRX 거래 상·하위 50종목</a></li>
+        <li><a href="https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=64014" target="_blank" rel="noopener noreferrer">증권거래세법 시행령</a></li>
+        <li><a href="https://ets.krx.co.kr/contents/RGL/04/04030301/RGL04030301.jsp" target="_blank" rel="noopener noreferrer">KRX 단일가격 경쟁매매 제도</a></li>
+        <li><a href="https://apiportal.koreainvestment.com/apiservice-apiservice" target="_blank" rel="noopener noreferrer">KIS Open API 개발자센터</a></li>
+      </ul>
+
       <p class="foot">※ 아래 프로토타입 탭에서 API로 데이터 로드 후 종목/매수·매도 계획까지 바로 확인할 수 있습니다.</p>
     </section>
 
