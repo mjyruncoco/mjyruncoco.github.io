@@ -1,0 +1,10 @@
+{
+  "target_url": "https://api.kiwoom.com/.../your-endpoint",
+  "headers": {
+    "appkey": "여기에_키움_APP_KEY",
+    "appsecret": "여기에_키움_APP_SECRET",
+    "authorization": "Bearer 여기에_토큰",
+    "cont-yn": "N",
+    "next-key": ""
+  }
+}
