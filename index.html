@@ -1,1 +1,254 @@
-<scriot type="text/javascript">location.href=https://coco123.mjyruncoco.com";<script>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>국장 저가·상위랭킹 종목 익일 매수 자동매매 프로그램</title>
+  <style>
+    :root { --bg:#0b1220; --panel:#121a2b; --line:#2b3a57; --text:#e7eefc; --muted:#9fb1d9; --acc:#56a0ff; --ok:#2fd18b; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family: "Noto Sans KR", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width:1200px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 12px; font-size:30px; }
+    .desc { color:var(--muted); margin-bottom:18px; }
+    .grid { display:grid; grid-template-columns: 1.15fr 1fr; gap:16px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .panel h2 { margin:0 0 12px; font-size:18px; }
+    .form { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted); }
+    input, select, textarea, button { border:1px solid var(--line); border-radius:8px; background:#0d1525; color:var(--text); padding:8px; font-size:14px; }
+    textarea { min-height:220px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .btn-row { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    button { cursor:pointer; background:#17305e; }
+    button:hover { background:#20407b; }
+    .metrics { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+    .metric { background:#0d1525; border:1px solid var(--line); border-radius:10px; padding:10px; }
+    .metric .k { color:var(--muted); font-size:12px; }
+    .metric .v { font-size:18px; font-weight:700; margin-top:4px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { border-bottom:1px solid var(--line); padding:8px; text-align:right; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align:left; }
+    .hint { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.45; }
+    @media (max-width: 980px) { .grid{grid-template-columns:1fr;} .form{grid-template-columns:1fr;} .metrics{grid-template-columns:1fr 1fr;} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>국장 저가·상위랭킹 종목 익일 매수 자동매매 프로그램 (프로토타입)</h1>
+    <p class="desc">보고서의 핵심 로직(전일 종가 ≤ 기준가 + 전일 랭킹 Top N → 익일 매수/당일 청산)을 브라우저에서 빠르게 검증할 수 있도록 만든 시뮬레이터입니다.</p>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>전략/비용 파라미터</h2>
+        <div class="form">
+          <label>종가 상한 (원)
+            <input id="priceCap" type="number" value="20000" />
+          </label>
+          <label>Top N
+            <input id="topN" type="number" value="50" />
+          </label>
+          <label>랭킹 기준
+            <select id="rankMetric">
+              <option value="value">거래대금</option>
+              <option value="volume">거래량</option>
+              <option value="mcap">시가총액</option>
+            </select>
+          </label>
+          <label>왕복 수수료 (bps, 편도 입력)
+            <input id="commissionBps" type="number" value="2" step="0.1" />
+          </label>
+          <label>편도 슬리피지 (bps)
+            <input id="slipBps" type="number" value="5" step="0.1" />
+          </label>
+          <label>코스피 거래세 (bps)
+            <input id="taxKospiBps" type="number" value="5" step="0.1" />
+          </label>
+          <label>코스피 농특세 (bps)
+            <input id="agriKospiBps" type="number" value="15" step="0.1" />
+          </label>
+          <label>코스닥 거래세 (bps)
+            <input id="taxKosdaqBps" type="number" value="20" step="0.1" />
+          </label>
+        </div>
+
+        <h2 style="margin-top:18px;">데이터 입력 (CSV)</h2>
+        <textarea id="csvInput" placeholder="date,ticker,market,open,close,volume,value,mcap,suspended\n2025-01-02,005930,KOSPI,80000,81000,100000,8100000000,480000000000000,0"></textarea>
+        <div class="btn-row">
+          <button id="loadSampleBtn">샘플 데이터 불러오기</button>
+          <button id="runBtn">백테스트 실행</button>
+        </div>
+        <p class="hint">
+          * 백테스트 규칙: D일 필터/랭킹 산출 → D+1 시가 매수 → D+1 종가 매도(동일 일자 청산).<br>
+          * 필수 컬럼: <code>date,ticker,market,open,close,volume,value,mcap,suspended</code><br>
+          * market은 <code>KOSPI</code> 또는 <code>KOSDAQ</code>를 권장합니다.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>성과 요약</h2>
+        <div class="metrics">
+          <div class="metric"><div class="k">누적 수익률</div><div id="cumRet" class="v">-</div></div>
+          <div class="metric"><div class="k">평균 일수익률</div><div id="avgRet" class="v">-</div></div>
+          <div class="metric"><div class="k">최대 낙폭(MDD)</div><div id="mdd" class="v">-</div></div>
+          <div class="metric"><div class="k">거래일 수</div><div id="days" class="v">-</div></div>
+          <div class="metric"><div class="k">총 트레이드 수</div><div id="trades" class="v">-</div></div>
+          <div class="metric"><div class="k">승률</div><div id="winRate" class="v">-</div></div>
+        </div>
+
+        <h2 style="margin-top:16px;">일별 성과 (최근 20일)</h2>
+        <div style="max-height:360px; overflow:auto;">
+          <table>
+            <thead>
+              <tr><th>거래일</th><th>선정 종목</th><th>일수익률</th><th>누적</th></tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function parseCsv(text) {
+      const lines = text.trim().split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) return [];
+      const header = lines[0].split(',').map(s => s.trim());
+      return lines.slice(1).map(line => {
+        const cols = line.split(',').map(s => s.trim());
+        const row = {};
+        header.forEach((h, i) => row[h] = cols[i] ?? '');
+        row.open = Number(row.open);
+        row.close = Number(row.close);
+        row.volume = Number(row.volume);
+        row.value = Number(row.value);
+        row.mcap = Number(row.mcap);
+        row.suspended = Number(row.suspended || 0);
+        return row;
+      }).filter(r => r.date && r.ticker && Number.isFinite(r.open) && Number.isFinite(r.close));
+    }
+
+    function bpsToRate(bps) { return Number(bps) / 10000; }
+
+    function groupByDate(rows) {
+      const m = new Map();
+      for (const r of rows) {
+        if (!m.has(r.date)) m.set(r.date, []);
+        m.get(r.date).push(r);
+      }
+      return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    }
+
+    function runBacktest(rows, p) {
+      const dated = groupByDate(rows);
+      const daily = [];
+      let tradeCount = 0, winCount = 0;
+      let equity = 1, peak = 1, mdd = 0;
+
+      for (let i = 0; i < dated.length - 1; i++) {
+        const [signalDate, todayRows] = dated[i];
+        const [tradeDate, nextRows] = dated[i + 1];
+        const nextMap = new Map(nextRows.map(r => [r.ticker, r]));
+
+        const selected = todayRows
+          .filter(r => r.close <= p.priceCap && !r.suspended)
+          .sort((a,b)=>(b[p.rankMetric] || 0) - (a[p.rankMetric] || 0))
+          .slice(0, p.topN)
+          .filter(r => nextMap.has(r.ticker));
+
+        if (selected.length === 0) continue;
+
+        let sumRet = 0;
+        for (const s of selected) {
+          const n = nextMap.get(s.ticker);
+          const tax = n.market === 'KOSPI' ? p.taxKospi + p.agriKospi : p.taxKosdaq;
+          const buy = n.open * (1 + p.commission + p.slippage);
+          const sell = n.close * (1 - p.commission - p.slippage - tax);
+          const ret = (sell - buy) / buy;
+          sumRet += ret;
+          tradeCount += 1;
+          if (ret > 0) winCount += 1;
+        }
+
+        const dayRet = sumRet / selected.length;
+        equity *= (1 + dayRet);
+        peak = Math.max(peak, equity);
+        mdd = Math.min(mdd, equity / peak - 1);
+
+        daily.push({ tradeDate, signalDate, picks: selected.length, dayRet, equity });
+      }
+
+      const cumRet = equity - 1;
+      const avgRet = daily.length ? daily.reduce((a,b)=>a+b.dayRet,0)/daily.length : 0;
+      return { daily, tradeCount, winRate: tradeCount ? winCount/tradeCount : 0, cumRet, avgRet, mdd };
+    }
+
+    function fmtPct(v) { return `${(v*100).toFixed(2)}%`; }
+
+    function render(result) {
+      $('cumRet').textContent = fmtPct(result.cumRet);
+      $('avgRet').textContent = fmtPct(result.avgRet);
+      $('mdd').textContent = fmtPct(result.mdd);
+      $('days').textContent = String(result.daily.length);
+      $('trades').textContent = String(result.tradeCount);
+      $('winRate').textContent = fmtPct(result.winRate);
+
+      const body = $('resultBody');
+      body.innerHTML = '';
+      result.daily.slice(-20).reverse().forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.tradeDate}</td><td>${r.picks}</td><td>${fmtPct(r.dayRet)}</td><td>${fmtPct(r.equity - 1)}</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    function loadSample() {
+      const tickers = [
+        ['005930','KOSPI'],['000660','KOSPI'],['035420','KOSPI'],['051910','KOSPI'],['068270','KOSDAQ'],
+        ['247540','KOSDAQ'],['086520','KOSDAQ'],['196170','KOSDAQ'],['214150','KOSDAQ'],['112040','KOSDAQ']
+      ];
+      const rows = ['date,ticker,market,open,close,volume,value,mcap,suspended'];
+      const start = new Date('2025-01-02');
+      for (let d=0; d<45; d++) {
+        const day = new Date(start); day.setDate(start.getDate()+d);
+        const date = day.toISOString().slice(0,10);
+        for (let i=0; i<tickers.length; i++) {
+          const [ticker, market] = tickers[i];
+          const base = 3000 + i*1300;
+          const open = Math.round(base + (Math.sin((d+i)/5)*400) + (Math.random()*220));
+          const close = Math.max(500, Math.round(open * (0.97 + Math.random()*0.08)));
+          const volume = Math.round(150000 + Math.random()*900000);
+          const value = volume * close;
+          const mcap = Math.round((30 + i*10 + Math.random()*15) * 1_000_000_000);
+          rows.push([date,ticker,market,open,close,volume,value,mcap,0].join(','));
+        }
+      }
+      $('csvInput').value = rows.join('\n');
+    }
+
+    $('loadSampleBtn').addEventListener('click', loadSample);
+    $('runBtn').addEventListener('click', () => {
+      const rows = parseCsv($('csvInput').value);
+      if (!rows.length) {
+        alert('CSV 데이터를 확인하세요.');
+        return;
+      }
+      const p = {
+        priceCap: Number($('priceCap').value),
+        topN: Number($('topN').value),
+        rankMetric: $('rankMetric').value,
+        commission: bpsToRate($('commissionBps').value),
+        slippage: bpsToRate($('slipBps').value),
+        taxKospi: bpsToRate($('taxKospiBps').value),
+        agriKospi: bpsToRate($('agriKospiBps').value),
+        taxKosdaq: bpsToRate($('taxKosdaqBps').value)
+      };
+      const result = runBacktest(rows, p);
+      render(result);
+    });
+
+    loadSample();
+  </script>
+</body>
+</html>
