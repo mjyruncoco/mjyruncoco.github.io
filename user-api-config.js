@@ -1,16 +1,23 @@
 /**
- * 개인 API 설정 파일
- * - 이 파일에 본인 키/헤더만 입력해서 사용하세요.
- * - 정적 웹 페이지에서는 키가 노출될 수 있으므로, 실계좌 민감키는 브라우저 저장용으로 권장하지 않습니다.
+ * 키움 REST API 개인 설정 파일
+ * - 이 파일에 본인 키만 입력해서 사용하세요.
+ * - 정적 페이지 특성상 키 노출 위험이 있으니 실계좌 민감키는 주의해서 사용하세요.
  */
 window.USER_API_CONFIG = {
-  // 기본 데이터 URL (예: 로컬 샘플)
+  provider: 'kiwoom_rest',
+
+  // 호출할 데이터 URL
+  // 예: 로컬 샘플('/api/stocks.json') 또는 키움 REST 데이터 프록시 URL
   apiUrl: '/api/stocks.json',
 
-  // API 호출 시 필요한 헤더를 여기에 입력
-  // 예시) Authorization: 'Bearer ...', 'appkey': '...', 'appsecret': '...'
+  // 키움 REST 인증값(필요한 항목만 입력)
+  appKey: '',
+  appSecret: '',
+  accessToken: '', // 예: 'eyJ...'
+
+  // 키움 연속조회/부가 헤더가 필요하면 여기에 추가
   headers: {
-    // 'appkey': '여기에_키_입력',
-    // 'appsecret': '여기에_시크릿_입력'
+    // 'cont-yn': 'N',
+    // 'next-key': ''
   }
 };
