@@ -118,6 +118,7 @@ python -m cli.main live --config configs/live.yaml</code></pre>
         <li><a href="https://openapi.krx.co.kr/contents/OPP/INFO/OPPINFO003.jsp" target="_blank" rel="noopener noreferrer">KRX Open API 이용절차</a></li>
       </ul>
       <p class="muted">※ 아래 탭에서 수동 매매 가이드/전략 탐색/매매일지를 그대로 사용 가능합니다.</p>
+      <p class="muted">※ API 키는 <code>user-api-config.js</code> 파일의 <code>headers</code>에 입력하면 됩니다.</p>
     </section>
 
     <section id="manual" class="page manual hidden">
@@ -214,11 +215,13 @@ python -m cli.main live --config configs/live.yaml</code></pre>
     </section>
   </div>
 
+  <script src="user-api-config.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const pct = (x) => `${(x * 100).toFixed(2)}%`;
     const bps = (x) => Number(x) / 10000;
     const JOURNAL_KEY = 'manual_trade_journal_v2';
+    const API_CONF = window.USER_API_CONFIG || {};
 
     document.querySelectorAll('.tab-btn').forEach((btn)=>btn.addEventListener('click',()=>{
       document.querySelectorAll('.tab-btn').forEach((b)=>b.classList.remove('active'));
@@ -255,7 +258,7 @@ python -m cli.main live --config configs/live.yaml</code></pre>
       const url = $('apiUrl').value.trim(); if (!url) return;
       $('apiStatus').textContent = 'API 호출 중...';
       try {
-        const resp = await fetch(url);
+        const resp = await fetch(url, { headers: API_CONF.headers || {} });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const text = await resp.text();
         let rows=[];
@@ -522,6 +525,7 @@ python -m cli.main live --config configs/live.yaml</code></pre>
     $('clearJournalBtn').addEventListener('click', clearJournal);
 
     $('jDate').value = new Date().toISOString().slice(0,10);
+    if (API_CONF.apiUrl) $('apiUrl').value = API_CONF.apiUrl;
     $('csvInput').value = rowsToCsv(sampleRows());
     renderJournal();
   </script>
