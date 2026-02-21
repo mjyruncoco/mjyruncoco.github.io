@@ -97,6 +97,31 @@ class KiwoomGateway:
             return ask, "ask"
         return 0, "none"
 
+    def _extract_name(self, payload: dict[str, Any]) -> str:
+        for key in ("stk_nm", "hts_kor_isnm", "isu_nm", "prdt_abrv_name", "stk_kor_nm"):
+            name = str(payload.get(key, "")).strip()
+            if name:
+                return name
+        return ""
+
+    def symbol_name(self, code: str) -> str:
+        if not self.enabled():
+            return code
+        try:
+            quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+            data = quote.get("output") if isinstance(quote, dict) else None
+            if isinstance(data, dict):
+                name = self._extract_name(data)
+                if name:
+                    return name
+            if isinstance(quote, dict):
+                name = self._extract_name(quote)
+                if name:
+                    return name
+        except Exception:  # nosec
+            pass
+        return code
+
     def quote(self, code: str) -> tuple[int, str]:
         errors: list[str] = []
 
@@ -178,6 +203,7 @@ def save_state(state: dict[str, Any]) -> None:
 
 STATE = load_state()
 LAST_PRICE: dict[str, int] = {}
+LAST_NAME: dict[str, str] = {}
 
 
 def json_response(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -197,39 +223,47 @@ def demo_quote(code: str) -> int:
     return max(1000, 9000 + (seed % 300) - 150)
 
 
-def record_fill(mode: str, side: str, code: str, qty: int, price: int) -> float:
+def record_fill(mode: str, side: str, code: str, qty: int, price: int) -> dict[str, Any]:
     with LOCK:
         positions: dict[str, Any] = STATE["positions"]
         pos = positions.get(code, {"qty": 0, "avg_price": 0})
         realized = 0.0
+        executed_qty = qty
         if side == "BUY":
             total_cost = pos["avg_price"] * pos["qty"] + price * qty
             new_qty = pos["qty"] + qty
             pos["qty"] = new_qty
             pos["avg_price"] = total_cost / new_qty if new_qty else 0
         else:
-            sell_qty = min(qty, pos["qty"])
-            if sell_qty > 0:
-                realized = (price - pos["avg_price"]) * sell_qty
-                pos["qty"] -= sell_qty
+            executed_qty = min(qty, pos["qty"])
+            if executed_qty > 0:
+                realized = (price - pos["avg_price"]) * executed_qty
+                pos["qty"] -= executed_qty
                 if pos["qty"] <= 0:
                     pos = {"qty": 0, "avg_price": 0}
         positions[code] = pos
-        STATE["fills"].append(
-            {
-                "ts": datetime.now().isoformat(timespec="seconds"),
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "mode": mode,
-                "side": side,
-                "code": code,
-                "qty": qty,
-                "price": price,
-                "realized_pnl": round(realized, 2),
-            }
-        )
+        fill = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "mode": mode,
+            "side": side,
+            "code": code,
+            "qty": executed_qty,
+            "requested_qty": qty,
+            "price": price,
+            "amount": price * executed_qty,
+            "realized_pnl": round(realized, 2),
+        }
+        STATE["fills"].append(fill)
         STATE["fills"] = STATE["fills"][-5000:]
         save_state(STATE)
-    return realized
+        return {
+            "realized_pnl": round(realized, 2),
+            "executed_qty": executed_qty,
+            "executed_amount": price * executed_qty,
+            "position_qty": int(pos["qty"]),
+            "avg_price": round(pos["avg_price"], 4),
+        }
 
 
 def daily_report(date_str: str) -> dict[str, Any]:
@@ -266,6 +300,29 @@ class Handler(BaseHTTPRequestHandler):
             if p.path == "/mode":
                 json_response(self, 200, {"trade_mode": STATE["trade_mode"]})
                 return
+            if p.path.startswith("/symbol/"):
+                code = p.path.split("/symbol/", 1)[1]
+                if not code:
+                    json_response(self, 400, {"error": "missing code"})
+                    return
+                name = KIWOOM.symbol_name(code) if KIWOOM.enabled() else code
+                with LOCK:
+                    LAST_NAME[code] = name
+                json_response(self, 200, {"code": code, "name": name})
+                return
+            if p.path == "/positions":
+                with LOCK:
+                    rows = []
+                    for code, pos in STATE.get("positions", {}).items():
+                        rows.append({
+                            "code": code,
+                            "name": LAST_NAME.get(code, code),
+                            "qty": int(pos.get("qty", 0)),
+                            "avg_price": float(pos.get("avg_price", 0)),
+                            "eval_amount": int(pos.get("qty", 0) * pos.get("avg_price", 0)),
+                        })
+                json_response(self, 200, {"count": len(rows), "positions": rows})
+                return
             if p.path.startswith("/quote/"):
                 code = p.path.split("/quote/", 1)[1]
                 if not code:
@@ -274,20 +331,22 @@ class Handler(BaseHTTPRequestHandler):
                 if KIWOOM.enabled():
                     price, source = KIWOOM.quote(code)
                     if price > 0:
+                        name = KIWOOM.symbol_name(code)
                         with LOCK:
                             LAST_PRICE[code] = price
-                        json_response(self, 200, {"code": code, "price": price, "source": source})
+                            LAST_NAME[code] = name
+                        json_response(self, 200, {"code": code, "name": name, "price": price, "source": source})
                         return
 
                     with LOCK:
                         last = LAST_PRICE.get(code)
                     if last is not None:
-                        json_response(self, 200, {"code": code, "price": last, "source": "last-good", "warning": source})
+                        json_response(self, 200, {"code": code, "name": LAST_NAME.get(code, code), "price": last, "source": "last-good", "warning": source})
                         return
 
                     json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
                 else:
-                    json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo"})
+                    json_response(self, 200, {"code": code, "name": code, "price": demo_quote(code), "source": "demo"})
                 return
             if p.path == "/reports/daily":
                 d = qs.get("date", [datetime.now().strftime("%Y-%m-%d")])[0]
@@ -322,9 +381,9 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 mode = STATE["trade_mode"]
                 broker = KIWOOM.submit_order(mode, side, code, qty, price)
-                realized = record_fill(mode, side, code, qty, price)
+                fill_info = record_fill(mode, side, code, qty, price)
                 broker["mode"] = mode
-                broker["realized_pnl"] = realized
+                broker.update(fill_info)
                 json_response(self, 200, broker)
                 return
             json_response(self, 404, {"error": "not found"})

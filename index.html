@@ -51,6 +51,7 @@
         <h2>자동매매 규칙 추가</h2>
         <div class="grid">
           <div><label for="code">종목코드</label><input id="code" value="005930" /></div>
+          <div style="align-self:end;"><button id="resolveBtn" type="button" class="secondary">종목 조회</button></div>
           <div><label for="buy">매수가(이하 도달 시 매수)</label><input id="buy" type="number" value="9000" /></div>
           <div><label for="tp">목표가(이상 도달 시 매도)</label><input id="tp" type="number" value="9900" /></div>
           <div><label for="sl">손절가(이하 도달 시 매도)</label><input id="sl" type="number" value="8700" /></div>
@@ -68,7 +69,7 @@
         </div>
         <p id="status" class="status">대기중</p>
         <table>
-          <thead><tr><th>ID</th><th>종목</th><th>현재가</th><th>매수가</th><th>목표가</th><th>손절가</th><th>수량</th><th>상태</th><th>최근실행</th></tr></thead>
+          <thead><tr><th>ID</th><th>종목코드</th><th>종목명</th><th>현재가</th><th>매수가</th><th>목표가</th><th>손절가</th><th>수량</th><th>예상매수금액</th><th>상태</th><th>최근실행</th></tr></thead>
           <tbody id="ruleBody"></tbody>
         </table>
       </section>
@@ -83,6 +84,19 @@
         <table>
           <thead><tr><th>종목</th><th>매수금액</th><th>매도금액</th><th>실현손익</th></tr></thead>
           <tbody id="pnlBody"></tbody>
+        </table>
+      </section>
+
+
+      <section class="panel">
+        <h2>보유 수량 확인</h2>
+        <div class="grid">
+          <div style="align-self:end;"><button id="positionsBtn" type="button">보유수량 조회</button></div>
+        </div>
+        <p id="positionsSummary" class="small">조회 전</p>
+        <table>
+          <thead><tr><th>종목코드</th><th>종목명</th><th>보유수량</th><th>평균단가</th><th>평가금액</th></tr></thead>
+          <tbody id="positionsBody"></tbody>
         </table>
       </section>
 
@@ -102,12 +116,23 @@
       const fmt = (n) => Number(n || 0).toLocaleString("ko-KR");
       q("reportDate").value = new Date().toISOString().slice(0, 10);
 
+      function base() { return q("apiBase").value.trim().replace(/\/$/, ""); }
+
       async function getJson(url, options = {}) {
         const res = await fetch(url, options);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try { const body = await res.json(); detail = `${detail} ${body.error || body.source || ""}`.trim(); } catch (_) {}
+          throw new Error(detail);
+        }
         return res.json();
       }
-      function base() { return q("apiBase").value.trim().replace(/\/$/, ""); }
+
+      async function resolveSymbol(code) {
+        const c = (code || q("code").value).trim();
+        if (!c) throw new Error("종목코드가 비어 있습니다.");
+        return getJson(`${base()}/symbol/${encodeURIComponent(c)}`);
+      }
 
       async function checkHealth() {
         try {
@@ -127,37 +152,60 @@
         q("status").textContent = `거래 모드 적용 완료: ${r.trade_mode}`;
       }
 
-      function addRule() {
-        const rule = { id: state.nextId++, code: q("code").value.trim(), buy: Number(q("buy").value), tp: Number(q("tp").value), sl: Number(q("sl").value), qty: Number(q("qty").value), status: "대기", current: 0, lastExec: "-", inPosition: false };
-        if (!rule.code || rule.qty <= 0 || rule.buy <= 0 || rule.tp <= 0 || rule.sl <= 0) {
+      async function addRule() {
+        const code = q("code").value.trim();
+        const buy = Number(q("buy").value);
+        const tp = Number(q("tp").value);
+        const sl = Number(q("sl").value);
+        const qty = Number(q("qty").value);
+        if (!code || qty <= 0 || buy <= 0 || tp <= 0 || sl <= 0) {
           q("status").textContent = "규칙 값이 올바르지 않습니다.";
           q("status").classList.add("warn");
           return;
         }
+        if (!(tp > buy && buy > sl)) {
+          q("status").textContent = "가격 조건 검증 실패: 목표가 > 매수가 > 손절가 여야 합니다.";
+          q("status").classList.add("warn");
+          return;
+        }
+        let name = code;
+        try {
+          const s = await resolveSymbol(code);
+          name = s.name || code;
+        } catch (_) {}
+
+        const rule = { id: state.nextId++, code, name, buy, tp, sl, qty, status: "대기", current: 0, lastExec: "-", inPosition: false, expectedAmount: buy * qty };
         state.rules.push(rule);
-        q("status").textContent = `규칙 ${rule.id} 추가 완료`;
+        q("status").textContent = `규칙 ${rule.id} 추가 완료 (${name})`;
         q("status").classList.remove("warn");
         renderRules();
       }
 
       async function getCurrentPrice(code) {
-        const r = await getJson(`${base()}/quote/${encodeURIComponent(code)}`);
-        return Number(r.price || 0);
+        return getJson(`${base()}/quote/${encodeURIComponent(code)}`);
       }
 
       async function executeOrder(action, rule, price) {
         const result = await getJson(`${base()}/orders/execute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: rule.code, side: action, qty: rule.qty, price }) });
-        state.logs.unshift({ time: now(), code: rule.code, action, price, qty: rule.qty, result: `${result.status} / pnl:${fmt(result.realized_pnl)}` });
+        const qty = Number(result.executed_qty ?? rule.qty);
+        const amount = Number(result.executed_amount ?? (price * qty));
+        state.logs.unshift({ time: now(), code: rule.code, name: rule.name, action, price, qty, amount, result: `${result.status} / pos:${result.position_qty ?? "-"} / pnl:${fmt(result.realized_pnl)}` });
         state.logs = state.logs.slice(0, 100);
         renderLogs();
+        await loadPositions();
       }
 
       async function tick() {
         for (const rule of state.rules) {
           if (rule.status.startsWith("완료")) continue;
           try {
-            const p = await getCurrentPrice(rule.code);
+            const quote = await getCurrentPrice(rule.code);
+            const p = Number(quote.price || 0);
             rule.current = p;
+            rule.name = quote.name || rule.name;
+            if (quote.source === "last-good") {
+              rule.status = `대기(last-good)`;
+            }
             if (!rule.inPosition && p <= rule.buy) {
               await executeOrder("BUY", rule, p); rule.inPosition = true; rule.status = "매수완료(보유중)"; rule.lastExec = `${now()} BUY ${p}`;
             } else if (rule.inPosition && p >= rule.tp) {
@@ -199,12 +247,32 @@
         }
       }
 
+      async function loadPositions() {
+        try {
+          const r = await getJson(`${base()}/positions`);
+          q("positionsSummary").textContent = `보유 종목 ${r.count}건`;
+          const body = q("positionsBody");
+          body.innerHTML = "";
+          if (!r.positions.length) {
+            body.innerHTML = '<tr><td colspan="5">보유 수량 없음</td></tr>';
+            return;
+          }
+          for (const row of r.positions) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${row.code}</td><td>${row.name || row.code}</td><td>${fmt(row.qty)}</td><td>${fmt(row.avg_price)}</td><td>${fmt(row.eval_amount)}</td>`;
+            body.appendChild(tr);
+          }
+        } catch (e) {
+          q("positionsSummary").textContent = `보유수량 조회 실패: ${e.message}`;
+        }
+      }
+
       function renderRules() {
         const body = q("ruleBody"); body.innerHTML = "";
-        if (!state.rules.length) { body.innerHTML = '<tr><td colspan="9" class="warn">등록된 규칙이 없습니다.</td></tr>'; return; }
+        if (!state.rules.length) { body.innerHTML = '<tr><td colspan="11" class="warn">등록된 규칙이 없습니다.</td></tr>'; return; }
         for (const r of state.rules) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${r.current || "-"}</td><td>${r.buy}</td><td>${r.tp}</td><td>${r.sl}</td><td>${r.qty}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
+          tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${r.name || r.code}</td><td>${r.current || "-"}</td><td>${fmt(r.buy)}</td><td>${fmt(r.tp)}</td><td>${fmt(r.sl)}</td><td>${fmt(r.qty)}</td><td>${fmt(r.expectedAmount)}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
           body.appendChild(tr);
         }
       }
@@ -213,22 +281,34 @@
         if (!state.logs.length) { body.innerHTML = '<tr><td colspan="6">로그 없음</td></tr>'; return; }
         for (const log of state.logs) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${log.time}</td><td>${log.code}</td><td>${log.action}</td><td>${log.price}</td><td>${log.qty}</td><td>${log.result}</td>`;
+          tr.innerHTML = `<td>${log.time}</td><td>${log.code} ${log.name || ""}</td><td>${log.action}</td><td>${fmt(log.price)}</td><td>${fmt(log.qty)} (금액 ${fmt(log.amount)})</td><td>${log.result}</td>`;
           body.appendChild(tr);
         }
       }
 
       q("healthBtn").addEventListener("click", checkHealth);
       q("applyModeBtn").addEventListener("click", () => applyMode().catch((e) => { q("status").textContent = `모드 적용 실패: ${e.message}`; q("status").classList.add("warn"); }));
-      q("addRuleBtn").addEventListener("click", addRule);
+      q("resolveBtn").addEventListener("click", async () => {
+        try {
+          const s = await resolveSymbol();
+          q("status").textContent = `종목 조회 성공: ${s.code} / ${s.name}`;
+          q("status").classList.remove("warn");
+        } catch (e) {
+          q("status").textContent = `종목 조회 실패: ${e.message}`;
+          q("status").classList.add("warn");
+        }
+      });
+      q("addRuleBtn").addEventListener("click", () => addRule().catch((e) => { q("status").textContent = `규칙 추가 실패: ${e.message}`; q("status").classList.add("warn"); }));
       q("startBtn").addEventListener("click", startMonitor);
       q("stopBtn").addEventListener("click", stopMonitor);
       q("clearBtn").addEventListener("click", clearRules);
       q("reportBtn").addEventListener("click", () => loadDailyReport().catch((e) => { q("reportSummary").textContent = `조회 실패: ${e.message}`; }));
+      q("positionsBtn").addEventListener("click", () => loadPositions());
 
       renderRules(); renderLogs();
       checkHealth();
       loadDailyReport();
+      loadPositions();
     </script>
   </body>
 </html>
