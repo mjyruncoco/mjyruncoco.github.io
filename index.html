@@ -14,7 +14,7 @@
       .muted { color: #526070; margin: 0; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
       label { display: block; margin-bottom: 4px; font-size: .84rem; color: #374151; }
-      input, button { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; }
+      input, button, select { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; }
       button { background: #0b4f71; color: #fff; font-weight: 700; cursor: pointer; }
       button.secondary { background: #475569; }
       button.danger { background: #b91c1c; }
@@ -26,33 +26,23 @@
       th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child { text-align: left; }
       th { background: #f8fbfd; color: #0b4f71; }
       .small { font-size: .82rem; color: #5b6878; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     </style>
   </head>
   <body>
     <main class="container">
       <section class="panel">
         <h1>국내 주식 자동실행 프로그램</h1>
-        <p class="muted">
-          분석 파라미터를 단순화하고, 사용자가 입력한 <strong>종목/매수가/목표가/손절가/수량</strong> 기준으로
-          가격 도달 시 자동 실행하도록 구성했습니다. (로컬 서버에서 주문 실행)
-        </p>
+        <p class="muted">종목/매수가/목표가/손절가/수량 규칙으로 자동 실행하며, 웹에서 모의/실투 모드를 전환할 수 있습니다.</p>
       </section>
 
       <section class="panel">
-        <h2>로컬 서버 연결</h2>
+        <h2>로컬 서버 연결 + 모드 설정</h2>
         <div class="grid">
-          <div>
-            <label for="apiBase">로컬 API 주소</label>
-            <input id="apiBase" value="http://127.0.0.1:9000" />
-          </div>
-          <div>
-            <label for="pollMs">가격 조회 주기(ms)</label>
-            <input id="pollMs" type="number" min="500" step="500" value="2000" />
-          </div>
-          <div style="align-self: end;">
-            <button id="healthBtn" type="button">연결 확인</button>
-          </div>
+          <div><label for="apiBase">로컬 API 주소</label><input id="apiBase" value="http://127.0.0.1:9000" /></div>
+          <div><label for="pollMs">가격 조회 주기(ms)</label><input id="pollMs" type="number" min="500" step="500" value="2000" /></div>
+          <div><label for="tradeMode">거래 모드</label><select id="tradeMode"><option value="mock">모의투자</option><option value="live">실투자</option></select></div>
+          <div style="align-self:end;"><button id="applyModeBtn" type="button">모드 적용</button></div>
+          <div style="align-self:end;"><button id="healthBtn" type="button">연결 확인</button></div>
         </div>
         <p id="healthStatus" class="small">연결 확인 전</p>
       </section>
@@ -65,9 +55,8 @@
           <div><label for="tp">목표가(이상 도달 시 매도)</label><input id="tp" type="number" value="9900" /></div>
           <div><label for="sl">손절가(이하 도달 시 매도)</label><input id="sl" type="number" value="8700" /></div>
           <div><label for="qty">수량</label><input id="qty" type="number" min="1" step="1" value="10" /></div>
-          <div style="align-self: end;"><button id="addRuleBtn" type="button">규칙 추가</button></div>
+          <div style="align-self:end;"><button id="addRuleBtn" type="button">규칙 추가</button></div>
         </div>
-        <p class="small">규칙 상태: 대기 → 매수완료(보유중) → 목표/손절 매도완료</p>
       </section>
 
       <section class="panel">
@@ -79,12 +68,21 @@
         </div>
         <p id="status" class="status">대기중</p>
         <table>
-          <thead>
-            <tr>
-              <th>ID</th><th>종목</th><th>현재가</th><th>매수가</th><th>목표가</th><th>손절가</th><th>수량</th><th>상태</th><th>최근실행</th>
-            </tr>
-          </thead>
+          <thead><tr><th>ID</th><th>종목</th><th>현재가</th><th>매수가</th><th>목표가</th><th>손절가</th><th>수량</th><th>상태</th><th>최근실행</th></tr></thead>
           <tbody id="ruleBody"></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>당일 수익 요약</h2>
+        <div class="grid">
+          <div><label for="reportDate">조회일</label><input id="reportDate" type="date" /></div>
+          <div style="align-self:end;"><button id="reportBtn" type="button">수익 조회</button></div>
+        </div>
+        <p id="reportSummary" class="small">조회 전</p>
+        <table>
+          <thead><tr><th>종목</th><th>매수금액</th><th>매도금액</th><th>실현손익</th></tr></thead>
+          <tbody id="pnlBody"></tbody>
         </table>
       </section>
 
@@ -94,28 +92,28 @@
           <thead><tr><th>시각</th><th>종목</th><th>액션</th><th>가격</th><th>수량</th><th>결과</th></tr></thead>
           <tbody id="logBody"></tbody>
         </table>
-        <p class="small">※ 브라우저에는 AppKey/Secret 저장 금지. 주문은 로컬 서버에서만 전송.</p>
       </section>
     </main>
 
     <script>
       const state = { rules: [], logs: [], timer: null, nextId: 1 };
-
       const q = (id) => document.getElementById(id);
       const now = () => new Date().toLocaleTimeString("ko-KR", { hour12: false });
+      const fmt = (n) => Number(n || 0).toLocaleString("ko-KR");
+      q("reportDate").value = new Date().toISOString().slice(0, 10);
 
       async function getJson(url, options = {}) {
         const res = await fetch(url, options);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }
-
       function base() { return q("apiBase").value.trim().replace(/\/$/, ""); }
 
       async function checkHealth() {
         try {
           const h = await getJson(`${base()}/health`);
-          q("healthStatus").textContent = `연결 성공: ${h.status} (mode=${h.mode || "unknown"})`;
+          q("tradeMode").value = h.trade_mode || "mock";
+          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}`;
           q("healthStatus").classList.remove("warn");
         } catch (e) {
           q("healthStatus").textContent = `연결 실패: ${e.message}`;
@@ -123,19 +121,14 @@
         }
       }
 
+      async function applyMode() {
+        const mode = q("tradeMode").value;
+        const r = await getJson(`${base()}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trade_mode: mode }) });
+        q("status").textContent = `거래 모드 적용 완료: ${r.trade_mode}`;
+      }
+
       function addRule() {
-        const rule = {
-          id: state.nextId++,
-          code: q("code").value.trim(),
-          buy: Number(q("buy").value),
-          tp: Number(q("tp").value),
-          sl: Number(q("sl").value),
-          qty: Number(q("qty").value),
-          status: "대기",
-          current: 0,
-          lastExec: "-",
-          inPosition: false
-        };
+        const rule = { id: state.nextId++, code: q("code").value.trim(), buy: Number(q("buy").value), tp: Number(q("tp").value), sl: Number(q("sl").value), qty: Number(q("qty").value), status: "대기", current: 0, lastExec: "-", inPosition: false };
         if (!rule.code || rule.qty <= 0 || rule.buy <= 0 || rule.tp <= 0 || rule.sl <= 0) {
           q("status").textContent = "규칙 값이 올바르지 않습니다.";
           q("status").classList.add("warn");
@@ -153,39 +146,24 @@
       }
 
       async function executeOrder(action, rule, price) {
-        const payload = { code: rule.code, side: action, qty: rule.qty, price };
-        const result = await getJson(`${base()}/orders/execute`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        state.logs.unshift({ time: now(), code: rule.code, action, price, qty: rule.qty, result: result.message || result.status || "ok" });
+        const result = await getJson(`${base()}/orders/execute`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: rule.code, side: action, qty: rule.qty, price }) });
+        state.logs.unshift({ time: now(), code: rule.code, action, price, qty: rule.qty, result: `${result.status} / pnl:${fmt(result.realized_pnl)}` });
         state.logs = state.logs.slice(0, 100);
         renderLogs();
       }
 
       async function tick() {
         for (const rule of state.rules) {
-          if (rule.status === "완료") continue;
+          if (rule.status.startsWith("완료")) continue;
           try {
             const p = await getCurrentPrice(rule.code);
             rule.current = p;
-
             if (!rule.inPosition && p <= rule.buy) {
-              await executeOrder("BUY", rule, p);
-              rule.inPosition = true;
-              rule.status = "매수완료(보유중)";
-              rule.lastExec = `${now()} BUY ${p}`;
+              await executeOrder("BUY", rule, p); rule.inPosition = true; rule.status = "매수완료(보유중)"; rule.lastExec = `${now()} BUY ${p}`;
             } else if (rule.inPosition && p >= rule.tp) {
-              await executeOrder("SELL", rule, p);
-              rule.inPosition = false;
-              rule.status = "완료(목표가 매도)";
-              rule.lastExec = `${now()} SELL(TP) ${p}`;
+              await executeOrder("SELL", rule, p); rule.inPosition = false; rule.status = "완료(목표가)"; rule.lastExec = `${now()} SELL(TP) ${p}`;
             } else if (rule.inPosition && p <= rule.sl) {
-              await executeOrder("SELL", rule, p);
-              rule.inPosition = false;
-              rule.status = "완료(손절 매도)";
-              rule.lastExec = `${now()} SELL(SL) ${p}`;
+              await executeOrder("SELL", rule, p); rule.inPosition = false; rule.status = "완료(손절)"; rule.lastExec = `${now()} SELL(SL) ${p}`;
             }
           } catch (e) {
             rule.status = `오류(${e.message})`;
@@ -198,44 +176,41 @@
         stopMonitor();
         const ms = Math.max(500, Number(q("pollMs").value || 2000));
         state.timer = setInterval(tick, ms);
-        q("status").textContent = `모니터링 시작 (${ms}ms 주기)`;
-        q("status").classList.remove("warn");
+        q("status").textContent = `모니터링 시작 (${ms}ms)`;
         tick();
       }
+      function stopMonitor() { if (state.timer) clearInterval(state.timer); state.timer = null; }
+      function clearRules() { stopMonitor(); state.rules = []; renderRules(); }
 
-      function stopMonitor() {
-        if (state.timer) clearInterval(state.timer);
-        state.timer = null;
-        q("status").textContent = "모니터링 중지";
-      }
-
-      function clearRules() {
-        stopMonitor();
-        state.rules = [];
-        renderRules();
+      async function loadDailyReport() {
+        const date = q("reportDate").value;
+        const r = await getJson(`${base()}/reports/daily?date=${encodeURIComponent(date)}`);
+        q("reportSummary").textContent = `${r.date} | 체결 ${r.count}건 | 실현손익 ${fmt(r.total_realized_pnl)}원`;
+        const body = q("pnlBody");
+        body.innerHTML = "";
+        if (!r.by_code.length) {
+          body.innerHTML = '<tr><td colspan="4">데이터 없음</td></tr>';
+          return;
+        }
+        for (const row of r.by_code) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${row.code}</td><td>${fmt(row.buy_amount)}</td><td>${fmt(row.sell_amount)}</td><td>${fmt(row.realized_pnl)}</td>`;
+          body.appendChild(tr);
+        }
       }
 
       function renderRules() {
-        const body = q("ruleBody");
-        body.innerHTML = "";
-        if (!state.rules.length) {
-          body.innerHTML = '<tr><td colspan="9" class="warn">등록된 규칙이 없습니다.</td></tr>';
-          return;
-        }
+        const body = q("ruleBody"); body.innerHTML = "";
+        if (!state.rules.length) { body.innerHTML = '<tr><td colspan="9" class="warn">등록된 규칙이 없습니다.</td></tr>'; return; }
         for (const r of state.rules) {
           const tr = document.createElement("tr");
           tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${r.current || "-"}</td><td>${r.buy}</td><td>${r.tp}</td><td>${r.sl}</td><td>${r.qty}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
           body.appendChild(tr);
         }
       }
-
       function renderLogs() {
-        const body = q("logBody");
-        body.innerHTML = "";
-        if (!state.logs.length) {
-          body.innerHTML = '<tr><td colspan="6">로그 없음</td></tr>';
-          return;
-        }
+        const body = q("logBody"); body.innerHTML = "";
+        if (!state.logs.length) { body.innerHTML = '<tr><td colspan="6">로그 없음</td></tr>'; return; }
         for (const log of state.logs) {
           const tr = document.createElement("tr");
           tr.innerHTML = `<td>${log.time}</td><td>${log.code}</td><td>${log.action}</td><td>${log.price}</td><td>${log.qty}</td><td>${log.result}</td>`;
@@ -244,14 +219,16 @@
       }
 
       q("healthBtn").addEventListener("click", checkHealth);
+      q("applyModeBtn").addEventListener("click", () => applyMode().catch((e) => { q("status").textContent = `모드 적용 실패: ${e.message}`; q("status").classList.add("warn"); }));
       q("addRuleBtn").addEventListener("click", addRule);
       q("startBtn").addEventListener("click", startMonitor);
       q("stopBtn").addEventListener("click", stopMonitor);
       q("clearBtn").addEventListener("click", clearRules);
+      q("reportBtn").addEventListener("click", () => loadDailyReport().catch((e) => { q("reportSummary").textContent = `조회 실패: ${e.message}`; }));
 
-      renderRules();
-      renderLogs();
+      renderRules(); renderLogs();
       checkHealth();
+      loadDailyReport();
     </script>
   </body>
 </html>
