@@ -7,6 +7,12 @@
 export KIWOOM_APPKEY='발급_appkey'
 export KIWOOM_SECRETKEY='발급_secretkey'
 
+# (권장) 모의/실전 분리 키가 있으면 각각 설정
+export KIWOOM_MOCK_APPKEY='모의_appkey'
+export KIWOOM_MOCK_SECRETKEY='모의_secretkey'
+export KIWOOM_LIVE_APPKEY='실전_appkey'
+export KIWOOM_LIVE_SECRETKEY='실전_secretkey'
+
 # 실주문 사용 시(매우 주의)
 export KIWOOM_ACCOUNT_NO='계좌번호'
 export KIWOOM_PRODUCT_NO='01'
@@ -32,6 +38,7 @@ python -m http.server 8000
 브라우저 접속: `http://127.0.0.1:8000`
 
 ## 웹에서 설정 가능
+- 연결 확인에서 API 키 인식 상태를 `api(mock/live)`로 확인 가능
 - 거래 모드: `모의투자(mock)` / `실투자(live)`
 - 모드 적용 버튼 누르면 서버 모드가 즉시 반영됨
 - 당일 수익 요약(실현손익) 조회 가능

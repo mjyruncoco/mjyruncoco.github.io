@@ -22,8 +22,14 @@ COMMON_SYMBOLS = {"005930": "삼성전자", "000660": "SK하이닉스", "035420"
 
 class KiwoomGateway:
     def __init__(self) -> None:
+        # 공통 키 (하위 모드 키가 없으면 이 값을 fallback으로 사용)
         self.appkey = os.getenv("KIWOOM_APPKEY", "")
         self.secret = os.getenv("KIWOOM_SECRETKEY", "")
+        # 모의/실전 개별 키 지원
+        self.mock_appkey = os.getenv("KIWOOM_MOCK_APPKEY", "")
+        self.mock_secret = os.getenv("KIWOOM_MOCK_SECRETKEY", "")
+        self.live_appkey = os.getenv("KIWOOM_LIVE_APPKEY", "")
+        self.live_secret = os.getenv("KIWOOM_LIVE_SECRETKEY", "")
         self.account_no = os.getenv("KIWOOM_ACCOUNT_NO", "")
         self.product_no = os.getenv("KIWOOM_PRODUCT_NO", "01")
         self.live_order = os.getenv("AUTO_LIVE_ORDER", "false").lower() in {"1", "true", "yes"}
@@ -33,11 +39,23 @@ class KiwoomGateway:
         self._token: dict[str, str] = {"mock": "", "live": ""}
         self._expires: dict[str, float] = {"mock": 0.0, "live": 0.0}
 
-    def enabled(self) -> bool:
-        return bool(self.appkey and self.secret)
+    def _credentials(self, mode: str) -> tuple[str, str]:
+        if mode == "mock":
+            appkey = self.mock_appkey or self.appkey
+            secret = self.mock_secret or self.secret
+        else:
+            appkey = self.live_appkey or self.appkey
+            secret = self.live_secret or self.secret
+        return appkey, secret
+
+    def enabled(self, mode: str | None = None) -> bool:
+        if mode is None:
+            return self.enabled("mock") or self.enabled("live")
+        appkey, secret = self._credentials(mode)
+        return bool(appkey and secret)
 
     def can_live_order(self) -> bool:
-        return self.enabled() and self.live_order and bool(self.account_no)
+        return self.enabled("live") and self.live_order and bool(self.account_no)
 
     def _base(self, mode: str) -> str:
         return KIWOOM_MOCK if mode == "mock" else KIWOOM_REAL
@@ -46,10 +64,13 @@ class KiwoomGateway:
         now = time.time()
         if self._token[mode] and now < self._expires[mode]:
             return self._token[mode]
+        appkey, secret = self._credentials(mode)
+        if not (appkey and secret):
+            raise ValueError(f"missing credentials for mode={mode}")
         payload = self._post_json(
             f"{self._base(mode)}/oauth2/token",
             {"Content-Type": "application/json;charset=UTF-8"},
-            {"grant_type": "client_credentials", "appkey": self.appkey, "secretkey": self.secret},
+            {"grant_type": "client_credentials", "appkey": appkey, "secretkey": secret},
         )
         self._token[mode] = payload["access_token"]
         self._expires[mode] = now + max(60, int(payload.get("expires_in", 3600)) - 30)
@@ -124,7 +145,7 @@ class KiwoomGateway:
     def symbol_name(self, code: str) -> str:
         if code in COMMON_SYMBOLS:
             return COMMON_SYMBOLS[code]
-        if not self.enabled():
+        if not self.enabled("live"):
             return ""
         try:
             quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
@@ -308,7 +329,7 @@ class Handler(BaseHTTPRequestHandler):
             p = urlparse(self.path)
             qs = parse_qs(p.query)
             if p.path == "/health":
-                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order()})
+                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "api_enabled_mock": KIWOOM.enabled("mock"), "api_enabled_live": KIWOOM.enabled("live"), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order()})
                 return
             if p.path == "/mode":
                 json_response(self, 200, {"trade_mode": STATE["trade_mode"]})
@@ -318,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                name = KIWOOM.symbol_name(code) if KIWOOM.enabled() else COMMON_SYMBOLS.get(code, "")
+                name = KIWOOM.symbol_name(code) if KIWOOM.enabled("live") else COMMON_SYMBOLS.get(code, "")
                 if name:
                     with LOCK:
                         LAST_NAME[code] = name
@@ -342,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                if KIWOOM.enabled():
+                if KIWOOM.enabled("live"):
                     price, source = KIWOOM.quote(code)
                     if price > 0:
                         name = KIWOOM.symbol_name(code) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")

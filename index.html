@@ -139,7 +139,7 @@
         try {
           const h = await getJson(`${base()}/health`);
           q("tradeMode").value = h.trade_mode || "mock";
-          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}, apiEnabled=${h.api_enabled}`;
+          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}, api(mock/live)=${h.api_enabled_mock}/${h.api_enabled_live}`;
           q("healthStatus").classList.remove("warn");
         } catch (e) {
           q("healthStatus").textContent = `연결 실패: ${e.message}`;
