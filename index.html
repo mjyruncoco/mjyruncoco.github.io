@@ -237,7 +237,7 @@
 
       async function loadDailyReport() {
         const date = q("reportDate").value;
-        const r = await getJson(`${base()}/reports/daily?date=${encodeURIComponent(date)}&source=auto`);
+        const r = await getJson(`${base()}/reports/daily?date=${encodeURIComponent(date)}&source=api`);
         q("reportSummary").textContent = `${r.date} | source=${r.source || "unknown"} | 체결 ${r.count}건 | 실현손익 ${fmt(r.total_realized_pnl)}원`;
         const body = q("pnlBody");
         body.innerHTML = "";

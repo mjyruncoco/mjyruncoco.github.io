@@ -446,71 +446,69 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if p.path == "/positions":
                 mode = STATE["trade_mode"]
-                if mode == "live" and KIWOOM.enabled("live"):
-                    try:
-                        rows = KIWOOM.fetch_positions("live")
-                        for row in rows:
-                            row["name"] = LAST_NAME.get(row["code"]) or COMMON_SYMBOLS.get(row["code"], "")
-                        json_response(self, 200, {"count": len(rows), "positions": rows, "source": "broker-api"})
-                        return
-                    except Exception as exc:  # nosec
-                        json_response(self, 502, {"error": f"positions api failed: {exc}"})
-                        return
-                with LOCK:
-                    rows = []
-                    for code, pos in STATE.get("positions", {}).items():
-                        rows.append({
-                            "code": code,
-                            "name": LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, ""),
-                            "qty": int(pos.get("qty", 0)),
-                            "avg_price": float(pos.get("avg_price", 0)),
-                            "eval_amount": int(pos.get("qty", 0) * pos.get("avg_price", 0)),
-                        })
-                json_response(self, 200, {"count": len(rows), "positions": rows, "source": "local"})
-                return
+                if not KIWOOM.enabled(mode):
+                    json_response(self, 502, {"error": f"positions api unavailable: no credentials for mode={mode}"})
+                    return
+                try:
+                    rows = KIWOOM.fetch_positions(mode)
+                    for row in rows:
+                        row["name"] = LAST_NAME.get(row["code"]) or COMMON_SYMBOLS.get(row["code"], "")
+                    json_response(self, 200, {"count": len(rows), "positions": rows, "source": f"broker-api-{mode}"})
+                    return
+                except Exception as exc:  # nosec
+                    json_response(self, 502, {"error": f"positions api failed: {exc}"})
+                    return
             if p.path.startswith("/quote/"):
                 code = p.path.split("/quote/", 1)[1]
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
                 mode = STATE["trade_mode"]
+                price = 0
+                source = ""
+                used_mode = mode
                 if KIWOOM.enabled(mode):
                     price, source = KIWOOM.quote(code, mode=mode)
+                if price <= 0 and mode == "mock" and KIWOOM.enabled("live"):
+                    # 모의 시세 조회 실패 시, 현재가 표시는 실전 시세로 재시도한다.
+                    used_mode = "live"
+                    price, source = KIWOOM.quote(code, mode="live")
                     if price > 0:
-                        name = KIWOOM.symbol_name(code, mode=mode) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
-                        with LOCK:
-                            LAST_PRICE[code] = price
-                            if name:
-                                LAST_NAME[code] = name
-                        json_response(self, 200, {"code": code, "name": name, "price": price, "source": source})
-                        return
+                        source = f"{source}|fallback-live"
 
+                if price > 0:
+                    name = KIWOOM.symbol_name(code, mode=used_mode) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
                     with LOCK:
-                        last = LAST_PRICE.get(code)
-                    if last is not None:
-                        json_response(self, 200, {"code": code, "name": LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, ""), "price": last, "source": "last-good", "warning": source})
-                        return
+                        LAST_PRICE[code] = price
+                        if name:
+                            LAST_NAME[code] = name
+                    json_response(self, 200, {"code": code, "name": name, "price": price, "source": source})
+                    return
 
-                    json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
-                else:
-                    json_response(self, 200, {"code": code, "name": COMMON_SYMBOLS.get(code, ""), "price": demo_quote(code), "source": "demo"})
+                with LOCK:
+                    last = LAST_PRICE.get(code)
+                if last is not None:
+                    json_response(self, 200, {"code": code, "name": LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, ""), "price": last, "source": "last-good", "warning": source or "quote unavailable"})
+                    return
+
+                json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source or f"mode={mode} no quote"})
                 return
             if p.path == "/reports/daily":
                 d = qs.get("date", [datetime.now().strftime("%Y-%m-%d")])[0]
-                source = qs.get("source", ["auto"])[0]
+                source = qs.get("source", ["api"])[0]
                 mode = STATE["trade_mode"]
-                if source in {"api", "auto"} and mode == "live" and KIWOOM.enabled("live"):
-                    try:
-                        json_response(self, 200, daily_report_from_broker(d, mode="live"))
-                        return
-                    except Exception as exc:  # nosec
-                        if source == "api":
-                            json_response(self, 502, {"error": f"daily report api failed: {exc}"})
-                            return
-                local = daily_report(d)
-                local["source"] = "local"
-                json_response(self, 200, local)
-                return
+                if source != "api":
+                    json_response(self, 400, {"error": "only source=api is allowed"})
+                    return
+                if not KIWOOM.enabled(mode):
+                    json_response(self, 502, {"error": f"daily report api unavailable: no credentials for mode={mode}"})
+                    return
+                try:
+                    json_response(self, 200, daily_report_from_broker(d, mode=mode))
+                    return
+                except Exception as exc:  # nosec
+                    json_response(self, 502, {"error": f"daily report api failed: {exc}"})
+                    return
             json_response(self, 404, {"error": "not found"})
         except Exception as exc:  # nosec
             json_response(self, 500, {"error": str(exc)})

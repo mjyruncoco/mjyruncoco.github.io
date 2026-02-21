@@ -51,7 +51,7 @@ python -m http.server 8000
 ## 웹에서 설정 가능
 - 연결 확인에서 API 키 인식 상태를 `api(mock/live)`로 확인 가능
 - 거래 모드: `모의투자(mock)` / `실투자(live)`
-- 보유수량/당일수익 조회 시 `source=broker-api|local`가 표시됩니다.
+- 보유수량/당일수익 조회는 브로커 API 기준이며, 실패 시 에러를 표시합니다(로컬 백업 미사용).
 - 모드 적용 버튼 누르면 서버 모드가 즉시 반영됨
 - 당일 수익 요약(실현손익) 조회 가능
 
@@ -63,14 +63,14 @@ python -m http.server 8000
 - `GET /symbol/{code}` (종목명 조회, 실패 시 `resolved=false`)
 - `GET /positions` (현재 보유수량/평균단가 조회)
 - `POST /orders/execute` (`code`, `side`, `qty`, `price`)
-- `GET /reports/daily?date=YYYY-MM-DD`
+- `GET /reports/daily?date=YYYY-MM-DD&source=api`
 
 ## 수익 데이터 저장
-- 서버는 체결/실현손익을 `trade_state.json`에 저장합니다.
-- 일자별 요약은 `/reports/daily`로 확인합니다.
+- 서버는 paper(모의 로컬실행) 체결/실현손익을 `trade_state.json`에 저장합니다.
+- 실계좌 당일 요약은 `/reports/daily?source=api`로 브로커 API 조회합니다.
 
 ## 주의
-- `GET /quote/{code}` 는 주문 모드와 별개로 live 시세 TR(`ka10001` → `ka10004`) 기준으로 조회합니다.
+- `GET /quote/{code}` 는 현재 웹 모드(mock/live)로 조회하고, mock 실패 시 live 시세로 재시도합니다.
 - 조회 실패 시 가짜 가격을 섞지 않고, 최근 정상값(`last-good`)이 있으면 그 값을 반환하고 없으면 502를 반환합니다.
 - `/orders/execute` 응답에는 `executed_qty`, `executed_amount`, `position_qty`, `avg_price`가 포함됩니다.
 - 종목명 조회가 실패하면 UI에 `종목명 미확인`으로 표시되며, 일부 대표 종목은 내장 매핑으로 보완됩니다.
