@@ -123,8 +123,40 @@
       <section class="panel">
         <h1>국내 주식 제안형 자동매매 보조 프로그램 <span class="chip">Prototype</span></h1>
         <p class="muted">
-          사용자가 최종 판단하는 <strong>제안형</strong> 화면입니다. 현재가 1만원 이하 + 유동성 필터를 통과한 종목만 계산하여
-          추천 매수가·목표가·손절가·권장 수량을 보여줍니다.
+          사용자가 최종 판단하는 <strong>제안형</strong> 화면입니다. API 호출로 후보/호가 데이터를 가져와 분석하고,
+          현재가 1만원 이하 + 유동성 필터를 통과한 종목의 추천 매수가·목표가·손절가·권장 수량을 보여줍니다.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>API 연결 설정</h2>
+        <div class="grid">
+          <div>
+            <label for="apiBase">API Base URL (프록시/백엔드)</label>
+            <input id="apiBase" type="text" value="" placeholder="예: http://127.0.0.1:9000" />
+          </div>
+          <div>
+            <label for="apiToken">Bearer Token (선택)</label>
+            <input id="apiToken" type="password" value="" placeholder="서버에서 발급한 접근 토큰" />
+          </div>
+          <div>
+            <label for="marketType">시장구분</label>
+            <select id="marketType">
+              <option value="000">전체</option>
+              <option value="001">코스피</option>
+              <option value="101">코스닥</option>
+            </select>
+          </div>
+          <div>
+            <label for="useDemo">데모 데이터 fallback</label>
+            <select id="useDemo">
+              <option value="yes" selected>예 (API 실패 시 사용)</option>
+              <option value="no">아니오</option>
+            </select>
+          </div>
+        </div>
+        <p class="small">
+          ※ 키움 API 키/시크릿을 프론트에 직접 넣지 말고, 반드시 서버 프록시에서 토큰 발급/호출을 수행하세요.
         </p>
       </section>
 
@@ -236,6 +268,71 @@
         return clamp(prob, 0.05, 0.95);
       }
 
+      async function fetchJson(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.json();
+      }
+
+      function normalizeCandidates(payload) {
+        const arr = Array.isArray(payload)
+          ? payload
+          : payload?.items || payload?.data || payload?.output || payload?.list || [];
+        return arr.map((it, idx) => ({
+          code: String(it.code || it.stk_cd || it.iscd || it.item_cd || `UNK${idx}`),
+          name: String(it.name || it.stk_nm || it.hts_kor_isnm || `종목${idx + 1}`),
+          price: Number(it.price || it.cur_prc || it.close || it.stk_prpr || 0),
+          tradeValue20d: Number(it.tradeValue20d || it.trdval || it.acml_tr_pbmn || 0),
+          momentum20d: Number(it.momentum20d || it.mtm || it.rtn_20d || 0),
+          atr: Number(it.atr || it.atr14 || 150),
+          spreadTicks: Number(it.spreadTicks || 99),
+          depthBuy3: Number(it.depthBuy3 || 0)
+        }));
+      }
+
+      function normalizeOrderbook(payload) {
+        const ask1 = Number(payload.ask1 || payload.sel_fpr_bid || payload.best_ask || payload?.output?.sel_fpr_bid || 0);
+        const bid1 = Number(payload.bid1 || payload.buy_fpr_bid || payload.best_bid || payload?.output?.buy_fpr_bid || 0);
+        const buy1 = Number(payload.buyQty1 || payload.buy_hoga_qty_1 || payload.bid1_qty || 0);
+        const buy2 = Number(payload.buyQty2 || payload.buy_hoga_qty_2 || payload.bid2_qty || 0);
+        const buy3 = Number(payload.buyQty3 || payload.buy_hoga_qty_3 || payload.bid3_qty || 0);
+        const spread = Math.max(0, ask1 - bid1);
+        const mid = (ask1 + bid1) / 2;
+        return {
+          spreadTicks: ask1 > 0 && bid1 > 0 ? Math.max(1, Math.round(spread / tickSize(mid))) : 99,
+          depthBuy3: buy1 + buy2 + buy3
+        };
+      }
+
+      async function loadUniverseFromApi(cfg) {
+        if (!cfg.apiBase) {
+          return sampleUniverse;
+        }
+
+        const headers = cfg.apiToken ? { Authorization: `Bearer ${cfg.apiToken}` } : {};
+        const base = cfg.apiBase.replace(/\/$/, "");
+
+        // 프록시 서버 권장 규약
+        // GET /candidates?market=000
+        // GET /orderbook/:code
+        const candidatesPayload = await fetchJson(`${base}/candidates?market=${encodeURIComponent(cfg.marketType)}`, { headers });
+        const rawCandidates = normalizeCandidates(candidatesPayload);
+
+        const enriched = [];
+        for (const c of rawCandidates) {
+          try {
+            const ob = await fetchJson(`${base}/orderbook/${encodeURIComponent(c.code)}`, { headers });
+            const { spreadTicks, depthBuy3 } = normalizeOrderbook(ob);
+            enriched.push({ ...c, spreadTicks, depthBuy3 });
+          } catch (_) {
+            enriched.push({ ...c, spreadTicks: c.spreadTicks || 99, depthBuy3: c.depthBuy3 || 0 });
+          }
+        }
+        return enriched;
+      }
+
       function recommend(row, cfg) {
         if (row.price > 10000) return null;
         if (row.spreadTicks > cfg.maxSpread) return null;
@@ -266,17 +363,40 @@
         };
       }
 
-      function run() {
+      async function run() {
         const cfg = {
           equity: Number(document.getElementById("equity").value),
           riskPct: Number(document.getElementById("riskPct").value),
           horizon: Number(document.getElementById("horizon").value),
           minProb: Number(document.getElementById("minProb").value),
           maxSpread: Number(document.getElementById("maxSpread").value),
-          minDepth: Number(document.getElementById("minDepth").value)
+          minDepth: Number(document.getElementById("minDepth").value),
+          apiBase: document.getElementById("apiBase").value.trim(),
+          apiToken: document.getElementById("apiToken").value.trim(),
+          marketType: document.getElementById("marketType").value,
+          useDemo: document.getElementById("useDemo").value === "yes"
         };
 
-        const rows = sampleUniverse
+        const statusEl = document.getElementById("status");
+        statusEl.textContent = "API 호출 및 분석 중...";
+        statusEl.classList.remove("warn");
+
+        let universe = [];
+        try {
+          universe = await loadUniverseFromApi(cfg);
+        } catch (err) {
+          if (!cfg.useDemo) {
+            statusEl.textContent = `API 호출 실패: ${err.message}`;
+            statusEl.classList.add("warn");
+            document.getElementById("resultBody").innerHTML = "";
+            return;
+          }
+          universe = sampleUniverse;
+          statusEl.textContent = `API 호출 실패(${err.message}) → 데모 데이터로 분석합니다.`;
+          statusEl.classList.add("warn");
+        }
+
+        const rows = universe
           .map((row) => recommend(row, cfg))
           .filter(Boolean)
           .sort((a, b) => b.prob - a.prob || b.liqScore - a.liqScore);
@@ -288,13 +408,15 @@
           const tr = document.createElement("tr");
           tr.innerHTML = `<td colspan="12" class="warn">조건을 만족하는 종목이 없습니다. 최소 확률/깊이/스프레드 조건을 완화해 보세요.</td>`;
           body.appendChild(tr);
-          document.getElementById("status").textContent = "추천 0건";
-          document.getElementById("status").classList.add("warn");
+          statusEl.textContent = "추천 0건";
+          statusEl.classList.add("warn");
           return;
         }
 
-        document.getElementById("status").textContent = `추천 ${rows.length}건 계산 완료 (필터: 가격≤1만원, 스프레드≤${cfg.maxSpread}틱, depth≥${krw(cfg.minDepth)})`;
-        document.getElementById("status").classList.remove("warn");
+        statusEl.textContent = `추천 ${rows.length}건 계산 완료 (필터: 가격≤1만원, 스프레드≤${cfg.maxSpread}틱, depth≥${krw(cfg.minDepth)})`;
+        if (!statusEl.textContent.includes("데모")) {
+          statusEl.classList.remove("warn");
+        }
 
         for (const row of rows) {
           const tr = document.createElement("tr");
@@ -316,7 +438,9 @@
         }
       }
 
-      document.getElementById("runBtn").addEventListener("click", run);
+      document.getElementById("runBtn").addEventListener("click", () => {
+        run();
+      });
       run();
     </script>
   </body>
