@@ -139,7 +139,7 @@
         try {
           const h = await getJson(`${base()}/health`);
           q("tradeMode").value = h.trade_mode || "mock";
-          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}, api(mock/live)=${h.api_enabled_mock}/${h.api_enabled_live}`;
+          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}, useMockEnv=${h.use_mock_env}, api(mock/live)=${h.api_enabled_mock}/${h.api_enabled_live}`;
           q("healthStatus").classList.remove("warn");
         } catch (e) {
           q("healthStatus").textContent = `연결 실패: ${e.message}`;
@@ -237,8 +237,8 @@
 
       async function loadDailyReport() {
         const date = q("reportDate").value;
-        const r = await getJson(`${base()}/reports/daily?date=${encodeURIComponent(date)}`);
-        q("reportSummary").textContent = `${r.date} | 체결 ${r.count}건 | 실현손익 ${fmt(r.total_realized_pnl)}원`;
+        const r = await getJson(`${base()}/reports/daily?date=${encodeURIComponent(date)}&source=auto`);
+        q("reportSummary").textContent = `${r.date} | source=${r.source || "unknown"} | 체결 ${r.count}건 | 실현손익 ${fmt(r.total_realized_pnl)}원`;
         const body = q("pnlBody");
         body.innerHTML = "";
         if (!r.by_code.length) {
@@ -255,7 +255,7 @@
       async function loadPositions() {
         try {
           const r = await getJson(`${base()}/positions`);
-          q("positionsSummary").textContent = `보유 종목 ${r.count}건`;
+          q("positionsSummary").textContent = `보유 종목 ${r.count}건 (source=${r.source || "unknown"})`;
           const body = q("positionsBody");
           body.innerHTML = "";
           if (!r.positions.length) {

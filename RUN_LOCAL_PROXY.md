@@ -2,6 +2,10 @@
 
 브라우저에는 키를 넣지 않고, 로컬 서버가 키움 API를 대신 호출합니다.
 
+## 0) .env 파일
+프로젝트 루트에 `.env`를 두면 서버 시작 시 자동으로 읽습니다. (이미 셸에 있는 값은 덮어쓰지 않음)
+
+
 ## 1) 환경변수
 ```bash
 export KIWOOM_APPKEY='발급_appkey'
@@ -19,7 +23,14 @@ export KIWOOM_PRODUCT_NO='01'
 export AUTO_LIVE_ORDER=false   # 기본 false (paper)
 
 # 초기 모드 (웹에서도 변경 가능: mock|live)
-export KIWOOM_INITIAL_MODE=mock
+export KIWOOM_USE_MOCK=false  # true면 기본 mock, false면 기본 live
+export KIWOOM_INITIAL_MODE=live
+
+# (선택) 실계좌 잔고/체결 조회 TR 설정
+export KIWOOM_POS_API_ID=''
+export KIWOOM_POS_PATH='/api/dostk/inqr'
+export KIWOOM_FILL_API_ID=''
+export KIWOOM_FILL_PATH='/api/dostk/inqr'
 
 # 포트(기본 9000)
 export PORT=9000
@@ -40,6 +51,7 @@ python -m http.server 8000
 ## 웹에서 설정 가능
 - 연결 확인에서 API 키 인식 상태를 `api(mock/live)`로 확인 가능
 - 거래 모드: `모의투자(mock)` / `실투자(live)`
+- 보유수량/당일수익 조회 시 `source=broker-api|local`가 표시됩니다.
 - 모드 적용 버튼 누르면 서버 모드가 즉시 반영됨
 - 당일 수익 요약(실현손익) 조회 가능
 

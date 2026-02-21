@@ -14,10 +14,36 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
+
+
+def load_dotenv(path: str = ".env") -> None:
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            if not k or k in os.environ:
+                continue
+            v = v.strip().strip('"').strip("'")
+            os.environ[k] = v
+
+
+load_dotenv()
 KIWOOM_REAL = "https://api.kiwoom.com"
 KIWOOM_MOCK = "https://mockapi.kiwoom.com"
 STATE_PATH = os.getenv("STATE_PATH", "trade_state.json")
 COMMON_SYMBOLS = {"005930": "삼성전자", "000660": "SK하이닉스", "035420": "NAVER", "005380": "현대차", "051910": "LG화학"}
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 class KiwoomGateway:
@@ -32,12 +58,20 @@ class KiwoomGateway:
         self.live_secret = os.getenv("KIWOOM_LIVE_SECRETKEY", "")
         self.account_no = os.getenv("KIWOOM_ACCOUNT_NO", "")
         self.product_no = os.getenv("KIWOOM_PRODUCT_NO", "01")
-        self.live_order = os.getenv("AUTO_LIVE_ORDER", "false").lower() in {"1", "true", "yes"}
-        self.initial_mode = os.getenv("KIWOOM_INITIAL_MODE", "mock").lower()
+        self.live_order = _env_bool("AUTO_LIVE_ORDER", False)
+        use_mock = _env_bool("KIWOOM_USE_MOCK", True)
+        default_mode = "mock" if use_mock else "live"
+        self.initial_mode = os.getenv("KIWOOM_INITIAL_MODE", default_mode).lower()
         if self.initial_mode not in {"mock", "live"}:
             self.initial_mode = "mock"
         self._token: dict[str, str] = {"mock": "", "live": ""}
         self._expires: dict[str, float] = {"mock": 0.0, "live": 0.0}
+
+        # 실체결/잔고 조회 API 설정 (브로커 TR 연동용)
+        self.pos_path = os.getenv("KIWOOM_POS_PATH", "/api/dostk/inqr")
+        self.pos_api_id = os.getenv("KIWOOM_POS_API_ID", "")
+        self.fill_path = os.getenv("KIWOOM_FILL_PATH", "/api/dostk/inqr")
+        self.fill_api_id = os.getenv("KIWOOM_FILL_API_ID", "")
 
     def _credentials(self, mode: str) -> tuple[str, str]:
         if mode == "mock":
@@ -142,13 +176,13 @@ class KiwoomGateway:
                     return n
         return ""
 
-    def symbol_name(self, code: str) -> str:
+    def symbol_name(self, code: str, mode: str = "live") -> str:
         if code in COMMON_SYMBOLS:
             return COMMON_SYMBOLS[code]
-        if not self.enabled("live"):
+        if not self.enabled(mode):
             return ""
         try:
-            quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+            quote = self.tr_post(mode, "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
             name = self._find_name_recursive(quote)
             if name:
                 return name
@@ -156,38 +190,74 @@ class KiwoomGateway:
             pass
         return ""
 
-    def quote(self, code: str) -> tuple[int, str]:
+    def quote(self, code: str, mode: str = "live") -> tuple[int, str]:
         errors: list[str] = []
 
         try:
-            quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+            quote = self.tr_post(mode, "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
             data = quote.get("output") if isinstance(quote, dict) else None
             if isinstance(data, dict):
                 current = self._extract_from_quote(data)
                 if current > 0:
-                    return current, "kiwoom-live-ka10001-output"
+                    return current, f"kiwoom-{mode}-ka10001-output"
             if isinstance(quote, dict):
                 current = self._extract_from_quote(quote)
                 if current > 0:
-                    return current, "kiwoom-live-ka10001-top"
+                    return current, f"kiwoom-{mode}-ka10001-top"
         except Exception as exc:  # nosec
-            errors.append(f"live:ka10001:{exc}")
+            errors.append(f"{mode}:ka10001:{exc}")
 
         try:
-            ob = self.tr_post("live", "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
+            ob = self.tr_post(mode, "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
             ob_data = ob.get("output") if isinstance(ob, dict) else None
             if isinstance(ob_data, dict):
                 current, kind = self._extract_from_orderbook(ob_data)
                 if current > 0:
-                    return current, f"kiwoom-live-ka10004-{kind}-output"
+                    return current, f"kiwoom-{mode}-ka10004-{kind}-output"
             if isinstance(ob, dict):
                 current, kind = self._extract_from_orderbook(ob)
                 if current > 0:
-                    return current, f"kiwoom-live-ka10004-{kind}-top"
+                    return current, f"kiwoom-{mode}-ka10004-{kind}-top"
         except Exception as exc:  # nosec
-            errors.append(f"live:ka10004:{exc}")
+            errors.append(f"{mode}:ka10004:{exc}")
 
         return 0, "quote-unavailable | " + " ; ".join(errors[-4:])
+
+
+    def fetch_positions(self, mode: str) -> list[dict[str, Any]]:
+        if not self.pos_api_id:
+            raise ValueError("KIWOOM_POS_API_ID not set")
+        body = {"acnt_no": self.account_no, "prdt_no": self.product_no}
+        resp = self.tr_post(mode, self.pos_path, self.pos_api_id, body)
+        rows = []
+        output = resp.get("output") if isinstance(resp, dict) else None
+        candidates = output if output is not None else resp
+        if isinstance(candidates, list):
+            iterable = candidates
+        elif isinstance(candidates, dict):
+            iterable = [v for v in candidates.values() if isinstance(v, dict)] or [candidates]
+        else:
+            iterable = []
+        for item in iterable:
+            code = str(item.get("stk_cd") or item.get("code") or "").strip()
+            if not code:
+                continue
+            qty = self._to_price(item.get("qty") or item.get("hold_qty") or item.get("rmnd_qty"))
+            avg_price = self._to_price(item.get("avg_prc") or item.get("pchs_avg_pric") or item.get("avg_price"))
+            rows.append({"code": code, "qty": qty, "avg_price": float(avg_price), "eval_amount": int(qty * avg_price)})
+        return rows
+
+    def fetch_fills(self, mode: str, date_str: str) -> list[dict[str, Any]]:
+        if not self.fill_api_id:
+            raise ValueError("KIWOOM_FILL_API_ID not set")
+        body = {"acnt_no": self.account_no, "prdt_no": self.product_no, "date": date_str}
+        resp = self.tr_post(mode, self.fill_path, self.fill_api_id, body)
+        output = resp.get("output") if isinstance(resp, dict) else None
+        if isinstance(output, list):
+            return output
+        if isinstance(output, dict):
+            return [output]
+        return []
 
     def submit_order(self, mode: str, side: str, code: str, qty: int, price: int) -> dict[str, Any]:
         if not self.can_live_order():
@@ -316,6 +386,34 @@ def daily_report(date_str: str) -> dict[str, Any]:
     return {"date": date_str, "total_realized_pnl": total, "count": len(rows), "by_code": detail, "fills": rows}
 
 
+def daily_report_from_broker(date_str: str, mode: str) -> dict[str, Any]:
+    rows = KIWOOM.fetch_fills(mode, date_str)
+    by_code: dict[str, dict[str, Any]] = defaultdict(lambda: {"buy_amount": 0, "sell_amount": 0, "realized_pnl": 0})
+    norm_rows = []
+    for r in rows:
+        code = str(r.get("stk_cd") or r.get("code") or "")
+        side = str(r.get("side") or r.get("trde_tp") or "").upper()
+        if side in {"1", "B", "BUY", "매수"}:
+            side = "BUY"
+        elif side in {"2", "S", "SELL", "매도"}:
+            side = "SELL"
+        qty = KIWOOM._to_price(r.get("qty") or r.get("cntr_qty") or r.get("ord_qty"))
+        price = KIWOOM._to_price(r.get("price") or r.get("cntr_prc") or r.get("ord_uv"))
+        realized = float(r.get("realized_pnl") or 0)
+        amt = price * qty
+        if code:
+            c = by_code[code]
+            if side == "BUY":
+                c["buy_amount"] += amt
+            elif side == "SELL":
+                c["sell_amount"] += amt
+            c["realized_pnl"] += realized
+        norm_rows.append({"code": code, "side": side, "qty": qty, "price": price, "realized_pnl": realized})
+    detail = [{"code": k, **v} for k, v in by_code.items()]
+    total = round(sum(x["realized_pnl"] for x in detail), 2)
+    return {"date": date_str, "total_realized_pnl": total, "count": len(norm_rows), "by_code": detail, "fills": norm_rows, "source": "broker-api"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
@@ -329,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
             p = urlparse(self.path)
             qs = parse_qs(p.query)
             if p.path == "/health":
-                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "api_enabled_mock": KIWOOM.enabled("mock"), "api_enabled_live": KIWOOM.enabled("live"), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order()})
+                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "api_enabled_mock": KIWOOM.enabled("mock"), "api_enabled_live": KIWOOM.enabled("live"), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order(), "use_mock_env": _env_bool("KIWOOM_USE_MOCK", True)})
                 return
             if p.path == "/mode":
                 json_response(self, 200, {"trade_mode": STATE["trade_mode"]})
@@ -339,13 +437,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                name = KIWOOM.symbol_name(code) if KIWOOM.enabled("live") else COMMON_SYMBOLS.get(code, "")
+                mode = STATE["trade_mode"]
+                name = KIWOOM.symbol_name(code, mode=mode) if KIWOOM.enabled(mode) else COMMON_SYMBOLS.get(code, "")
                 if name:
                     with LOCK:
                         LAST_NAME[code] = name
                 json_response(self, 200, {"code": code, "name": name, "resolved": bool(name)})
                 return
             if p.path == "/positions":
+                mode = STATE["trade_mode"]
+                if mode == "live" and KIWOOM.enabled("live"):
+                    try:
+                        rows = KIWOOM.fetch_positions("live")
+                        for row in rows:
+                            row["name"] = LAST_NAME.get(row["code"]) or COMMON_SYMBOLS.get(row["code"], "")
+                        json_response(self, 200, {"count": len(rows), "positions": rows, "source": "broker-api"})
+                        return
+                    except Exception as exc:  # nosec
+                        json_response(self, 502, {"error": f"positions api failed: {exc}"})
+                        return
                 with LOCK:
                     rows = []
                     for code, pos in STATE.get("positions", {}).items():
@@ -356,17 +466,18 @@ class Handler(BaseHTTPRequestHandler):
                             "avg_price": float(pos.get("avg_price", 0)),
                             "eval_amount": int(pos.get("qty", 0) * pos.get("avg_price", 0)),
                         })
-                json_response(self, 200, {"count": len(rows), "positions": rows})
+                json_response(self, 200, {"count": len(rows), "positions": rows, "source": "local"})
                 return
             if p.path.startswith("/quote/"):
                 code = p.path.split("/quote/", 1)[1]
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                if KIWOOM.enabled("live"):
-                    price, source = KIWOOM.quote(code)
+                mode = STATE["trade_mode"]
+                if KIWOOM.enabled(mode):
+                    price, source = KIWOOM.quote(code, mode=mode)
                     if price > 0:
-                        name = KIWOOM.symbol_name(code) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
+                        name = KIWOOM.symbol_name(code, mode=mode) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
                         with LOCK:
                             LAST_PRICE[code] = price
                             if name:
@@ -386,7 +497,19 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if p.path == "/reports/daily":
                 d = qs.get("date", [datetime.now().strftime("%Y-%m-%d")])[0]
-                json_response(self, 200, daily_report(d))
+                source = qs.get("source", ["auto"])[0]
+                mode = STATE["trade_mode"]
+                if source in {"api", "auto"} and mode == "live" and KIWOOM.enabled("live"):
+                    try:
+                        json_response(self, 200, daily_report_from_broker(d, mode="live"))
+                        return
+                    except Exception as exc:  # nosec
+                        if source == "api":
+                            json_response(self, 502, {"error": f"daily report api failed: {exc}"})
+                            return
+                local = daily_report(d)
+                local["source"] = "local"
+                json_response(self, 200, local)
                 return
             json_response(self, 404, {"error": "not found"})
         except Exception as exc:  # nosec
@@ -417,7 +540,11 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 mode = STATE["trade_mode"]
                 broker = KIWOOM.submit_order(mode, side, code, qty, price)
-                fill_info = record_fill(mode, side, code, qty, price)
+                if broker.get("status") == "live":
+                    # 실주문은 체결 결과를 브로커 조회 API로 확인한다.
+                    fill_info = {"realized_pnl": 0.0, "executed_qty": 0, "executed_amount": 0, "position_qty": -1, "avg_price": 0}
+                else:
+                    fill_info = record_fill(mode, side, code, qty, price)
                 broker["mode"] = mode
                 broker.update(fill_info)
                 json_response(self, 200, broker)
