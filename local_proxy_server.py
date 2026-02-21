@@ -26,6 +26,8 @@ def load_dotenv(path: str = ".env") -> None:
                 continue
             k, v = line.split("=", 1)
             k = k.strip()
+            if k.startswith("export "):
+                k = k[len("export "):].strip()
             if not k or k in os.environ:
                 continue
             v = v.strip().strip('"').strip("'")
@@ -124,6 +126,29 @@ class KiwoomGateway:
             "next-key": "",
         }
         return self._post_json(f"{self._base(mode)}{path}", headers, body)
+
+    def available_modes(self) -> list[str]:
+        modes: list[str] = []
+        if self.enabled("mock"):
+            modes.append("mock")
+        if self.enabled("live"):
+            modes.append("live")
+        return modes
+
+    def quote_with_fallback(self, code: str, preferred_mode: str) -> tuple[int, str, str]:
+        order = [preferred_mode]
+        alt = "live" if preferred_mode == "mock" else "mock"
+        if alt not in order:
+            order.append(alt)
+        errors: list[str] = []
+        for mode in order:
+            if not self.enabled(mode):
+                continue
+            price, source = self.quote(code, mode=mode)
+            if price > 0:
+                return price, source, mode
+            errors.append(f"{mode}:{source}")
+        return 0, "quote-unavailable", preferred_mode if preferred_mode in {"mock","live"} else ""
 
     @staticmethod
     def _to_price(value: Any) -> int:
@@ -427,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             p = urlparse(self.path)
             qs = parse_qs(p.query)
             if p.path == "/health":
-                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "api_enabled_mock": KIWOOM.enabled("mock"), "api_enabled_live": KIWOOM.enabled("live"), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order(), "use_mock_env": _env_bool("KIWOOM_USE_MOCK", True)})
+                json_response(self, 200, {"status": "ok", "api_enabled": KIWOOM.enabled(), "api_enabled_mock": KIWOOM.enabled("mock"), "api_enabled_live": KIWOOM.enabled("live"), "trade_mode": STATE["trade_mode"], "live_order": KIWOOM.can_live_order(), "use_mock_env": _env_bool("KIWOOM_USE_MOCK", True), "pos_api_configured": bool(KIWOOM.pos_api_id), "fill_api_configured": bool(KIWOOM.fill_api_id)})
                 return
             if p.path == "/mode":
                 json_response(self, 200, {"trade_mode": STATE["trade_mode"]})
@@ -456,7 +481,7 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 200, {"count": len(rows), "positions": rows, "source": f"broker-api-{mode}"})
                     return
                 except Exception as exc:  # nosec
-                    json_response(self, 502, {"error": f"positions api failed: {exc}"})
+                    json_response(self, 502, {"error": f"positions api failed: {exc}", "hint": "set KIWOOM_POS_API_ID/KIWOOM_POS_PATH"})
                     return
             if p.path.startswith("/quote/"):
                 code = p.path.split("/quote/", 1)[1]
@@ -464,19 +489,10 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 400, {"error": "missing code"})
                     return
                 mode = STATE["trade_mode"]
-                price = 0
-                source = ""
-                used_mode = mode
-                if KIWOOM.enabled(mode):
-                    price, source = KIWOOM.quote(code, mode=mode)
-                if price <= 0 and mode == "mock" and KIWOOM.enabled("live"):
-                    # 모의 시세 조회 실패 시, 현재가 표시는 실전 시세로 재시도한다.
-                    used_mode = "live"
-                    price, source = KIWOOM.quote(code, mode="live")
-                    if price > 0:
-                        source = f"{source}|fallback-live"
+                price, source, used_mode = KIWOOM.quote_with_fallback(code, preferred_mode=mode)
 
                 if price > 0:
+                    source = source if used_mode == mode else f"{source}|fallback-{used_mode}"
                     name = KIWOOM.symbol_name(code, mode=used_mode) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
                     with LOCK:
                         LAST_PRICE[code] = price
@@ -507,7 +523,7 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 200, daily_report_from_broker(d, mode=mode))
                     return
                 except Exception as exc:  # nosec
-                    json_response(self, 502, {"error": f"daily report api failed: {exc}"})
+                    json_response(self, 502, {"error": f"daily report api failed: {exc}", "hint": "set KIWOOM_FILL_API_ID/KIWOOM_FILL_PATH"})
                     return
             json_response(self, 404, {"error": "not found"})
         except Exception as exc:  # nosec
