@@ -41,7 +41,7 @@ python -m http.server 8000
 - `GET /mode`
 - `POST /mode` (`{"trade_mode":"mock|live"}`)
 - `GET /quote/{code}`
-- `GET /symbol/{code}` (종목명 조회)
+- `GET /symbol/{code}` (종목명 조회, 실패 시 `resolved=false`)
 - `GET /positions` (현재 보유수량/평균단가 조회)
 - `POST /orders/execute` (`code`, `side`, `qty`, `price`)
 - `GET /reports/daily?date=YYYY-MM-DD`
@@ -54,6 +54,7 @@ python -m http.server 8000
 - `GET /quote/{code}` 는 주문 모드와 별개로 live 시세 TR(`ka10001` → `ka10004`) 기준으로 조회합니다.
 - 조회 실패 시 가짜 가격을 섞지 않고, 최근 정상값(`last-good`)이 있으면 그 값을 반환하고 없으면 502를 반환합니다.
 - `/orders/execute` 응답에는 `executed_qty`, `executed_amount`, `position_qty`, `avg_price`가 포함됩니다.
+- 종목명 조회가 실패하면 UI에 `종목명 미확인`으로 표시되며, 일부 대표 종목은 내장 매핑으로 보완됩니다.
 - 주문 전송 여부만 `mock|live` 모드 + `AUTO_LIVE_ORDER` 설정의 영향을 받습니다.
 - `AUTO_LIVE_ORDER=true` + 계좌정보 설정 시 실제 주문 전송될 수 있습니다.
 - 먼저 `mock` + `AUTO_LIVE_ORDER=false`로 충분히 검증하세요.

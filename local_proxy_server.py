@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 KIWOOM_REAL = "https://api.kiwoom.com"
 KIWOOM_MOCK = "https://mockapi.kiwoom.com"
 STATE_PATH = os.getenv("STATE_PATH", "trade_state.json")
+COMMON_SYMBOLS = {"005930": "삼성전자", "000660": "SK하이닉스", "035420": "NAVER", "005380": "현대차", "051910": "LG화학"}
 
 
 class KiwoomGateway:
@@ -98,29 +99,41 @@ class KiwoomGateway:
         return 0, "none"
 
     def _extract_name(self, payload: dict[str, Any]) -> str:
-        for key in ("stk_nm", "hts_kor_isnm", "isu_nm", "prdt_abrv_name", "stk_kor_nm"):
+        for key in ("stk_nm", "hts_kor_isnm", "isu_nm", "prdt_abrv_name", "stk_kor_nm", "kor_isnm", "item_name"):
             name = str(payload.get(key, "")).strip()
-            if name:
+            if name and any(ch.isalpha() for ch in name):
                 return name
         return ""
 
+    def _find_name_recursive(self, node: Any) -> str:
+        if isinstance(node, dict):
+            direct = self._extract_name(node)
+            if direct:
+                return direct
+            for v in node.values():
+                n = self._find_name_recursive(v)
+                if n:
+                    return n
+        if isinstance(node, list):
+            for item in node:
+                n = self._find_name_recursive(item)
+                if n:
+                    return n
+        return ""
+
     def symbol_name(self, code: str) -> str:
+        if code in COMMON_SYMBOLS:
+            return COMMON_SYMBOLS[code]
         if not self.enabled():
-            return code
+            return ""
         try:
             quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
-            data = quote.get("output") if isinstance(quote, dict) else None
-            if isinstance(data, dict):
-                name = self._extract_name(data)
-                if name:
-                    return name
-            if isinstance(quote, dict):
-                name = self._extract_name(quote)
-                if name:
-                    return name
+            name = self._find_name_recursive(quote)
+            if name:
+                return name
         except Exception:  # nosec
             pass
-        return code
+        return ""
 
     def quote(self, code: str) -> tuple[int, str]:
         errors: list[str] = []
@@ -305,10 +318,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                name = KIWOOM.symbol_name(code) if KIWOOM.enabled() else code
-                with LOCK:
-                    LAST_NAME[code] = name
-                json_response(self, 200, {"code": code, "name": name})
+                name = KIWOOM.symbol_name(code) if KIWOOM.enabled() else COMMON_SYMBOLS.get(code, "")
+                if name:
+                    with LOCK:
+                        LAST_NAME[code] = name
+                json_response(self, 200, {"code": code, "name": name, "resolved": bool(name)})
                 return
             if p.path == "/positions":
                 with LOCK:
@@ -316,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
                     for code, pos in STATE.get("positions", {}).items():
                         rows.append({
                             "code": code,
-                            "name": LAST_NAME.get(code, code),
+                            "name": LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, ""),
                             "qty": int(pos.get("qty", 0)),
                             "avg_price": float(pos.get("avg_price", 0)),
                             "eval_amount": int(pos.get("qty", 0) * pos.get("avg_price", 0)),
@@ -331,22 +345,23 @@ class Handler(BaseHTTPRequestHandler):
                 if KIWOOM.enabled():
                     price, source = KIWOOM.quote(code)
                     if price > 0:
-                        name = KIWOOM.symbol_name(code)
+                        name = KIWOOM.symbol_name(code) or LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, "")
                         with LOCK:
                             LAST_PRICE[code] = price
-                            LAST_NAME[code] = name
+                            if name:
+                                LAST_NAME[code] = name
                         json_response(self, 200, {"code": code, "name": name, "price": price, "source": source})
                         return
 
                     with LOCK:
                         last = LAST_PRICE.get(code)
                     if last is not None:
-                        json_response(self, 200, {"code": code, "name": LAST_NAME.get(code, code), "price": last, "source": "last-good", "warning": source})
+                        json_response(self, 200, {"code": code, "name": LAST_NAME.get(code) or COMMON_SYMBOLS.get(code, ""), "price": last, "source": "last-good", "warning": source})
                         return
 
                     json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
                 else:
-                    json_response(self, 200, {"code": code, "name": code, "price": demo_quote(code), "source": "demo"})
+                    json_response(self, 200, {"code": code, "name": COMMON_SYMBOLS.get(code, ""), "price": demo_quote(code), "source": "demo"})
                 return
             if p.path == "/reports/daily":
                 d = qs.get("date", [datetime.now().strftime("%Y-%m-%d")])[0]

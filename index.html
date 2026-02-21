@@ -114,6 +114,7 @@
       const q = (id) => document.getElementById(id);
       const now = () => new Date().toLocaleTimeString("ko-KR", { hour12: false });
       const fmt = (n) => Number(n || 0).toLocaleString("ko-KR");
+      const displayName = (name) => (name && String(name).trim()) ? name : "종목명 미확인";
       q("reportDate").value = new Date().toISOString().slice(0, 10);
 
       function base() { return q("apiBase").value.trim().replace(/\/$/, ""); }
@@ -138,7 +139,7 @@
         try {
           const h = await getJson(`${base()}/health`);
           q("tradeMode").value = h.trade_mode || "mock";
-          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}`;
+          q("healthStatus").textContent = `연결 성공: mode=${h.trade_mode}, liveOrder=${h.live_order}, apiEnabled=${h.api_enabled}`;
           q("healthStatus").classList.remove("warn");
         } catch (e) {
           q("healthStatus").textContent = `연결 실패: ${e.message}`;
@@ -168,16 +169,20 @@
           q("status").classList.add("warn");
           return;
         }
-        let name = code;
+        let name = "";
         try {
           const s = await resolveSymbol(code);
-          name = s.name || code;
+          name = s.name || "";
+          if (!s.resolved) {
+            q("status").textContent = `주의: 종목명 미확인 상태로 규칙을 추가합니다 (${code})`;
+            q("status").classList.add("warn");
+          }
         } catch (_) {}
 
         const rule = { id: state.nextId++, code, name, buy, tp, sl, qty, status: "대기", current: 0, lastExec: "-", inPosition: false, expectedAmount: buy * qty };
         state.rules.push(rule);
-        q("status").textContent = `규칙 ${rule.id} 추가 완료 (${name})`;
-        q("status").classList.remove("warn");
+        q("status").textContent = `규칙 ${rule.id} 추가 완료 (${displayName(name)})`;
+        if (name) q("status").classList.remove("warn");
         renderRules();
       }
 
@@ -202,7 +207,7 @@
             const quote = await getCurrentPrice(rule.code);
             const p = Number(quote.price || 0);
             rule.current = p;
-            rule.name = quote.name || rule.name;
+            rule.name = quote.name || rule.name || "";
             if (quote.source === "last-good") {
               rule.status = `대기(last-good)`;
             }
@@ -259,7 +264,7 @@
           }
           for (const row of r.positions) {
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${row.code}</td><td>${row.name || row.code}</td><td>${fmt(row.qty)}</td><td>${fmt(row.avg_price)}</td><td>${fmt(row.eval_amount)}</td>`;
+            tr.innerHTML = `<td>${row.code}</td><td>${displayName(row.name)}</td><td>${fmt(row.qty)}</td><td>${fmt(row.avg_price)}</td><td>${fmt(row.eval_amount)}</td>`;
             body.appendChild(tr);
           }
         } catch (e) {
@@ -272,7 +277,7 @@
         if (!state.rules.length) { body.innerHTML = '<tr><td colspan="11" class="warn">등록된 규칙이 없습니다.</td></tr>'; return; }
         for (const r of state.rules) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${r.name || r.code}</td><td>${r.current || "-"}</td><td>${fmt(r.buy)}</td><td>${fmt(r.tp)}</td><td>${fmt(r.sl)}</td><td>${fmt(r.qty)}</td><td>${fmt(r.expectedAmount)}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
+          tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${displayName(r.name)}</td><td>${r.current || "-"}</td><td>${fmt(r.buy)}</td><td>${fmt(r.tp)}</td><td>${fmt(r.sl)}</td><td>${fmt(r.qty)}</td><td>${fmt(r.expectedAmount)}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
           body.appendChild(tr);
         }
       }
@@ -281,7 +286,7 @@
         if (!state.logs.length) { body.innerHTML = '<tr><td colspan="6">로그 없음</td></tr>'; return; }
         for (const log of state.logs) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${log.time}</td><td>${log.code} ${log.name || ""}</td><td>${log.action}</td><td>${fmt(log.price)}</td><td>${fmt(log.qty)} (금액 ${fmt(log.amount)})</td><td>${log.result}</td>`;
+          tr.innerHTML = `<td>${log.time}</td><td>${log.code} ${displayName(log.name)}</td><td>${log.action}</td><td>${fmt(log.price)}</td><td>${fmt(log.qty)} (금액 ${fmt(log.amount)})</td><td>${log.result}</td>`;
           body.appendChild(tr);
         }
       }
@@ -291,7 +296,7 @@
       q("resolveBtn").addEventListener("click", async () => {
         try {
           const s = await resolveSymbol();
-          q("status").textContent = `종목 조회 성공: ${s.code} / ${s.name}`;
+          q("status").textContent = s.resolved ? `종목 조회 성공: ${s.code} / ${s.name}` : `종목명 조회 실패: ${s.code} (API/매핑 확인 필요)`;
           q("status").classList.remove("warn");
         } catch (e) {
           q("status").textContent = `종목 조회 실패: ${e.message}`;
