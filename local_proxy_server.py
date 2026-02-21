@@ -69,11 +69,35 @@ class KiwoomGateway:
         }
         return self._post_json(f"{self._base(mode)}{path}", headers, body)
 
-    def quote(self, mode: str, code: str) -> int:
-        ob = self.tr_post(mode, "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
-        bid = int(str(ob.get("buy_fpr_bid", "0")).replace(",", "") or "0")
-        ask = int(str(ob.get("sel_fpr_bid", "0")).replace(",", "") or "0")
-        return bid if bid > 0 else ask
+    @staticmethod
+    def _to_price(value: Any) -> int:
+        text = str(value or "").replace(",", "").strip()
+        if not text:
+            return 0
+        text = text.lstrip("+-")
+        if not text.isdigit():
+            return 0
+        return int(text)
+
+    def quote(self, code: str) -> tuple[int, str]:
+        # 현재가 조회는 주문 모드(mock/live)와 분리해서 항상 실전 시세로 조회한다.
+        # (모의 도메인 시세가 장외/비정상적으로 보이는 경우를 피하기 위함)
+        quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+        for key in ("cur_prc", "cur_price", "stck_prpr", "now_prc", "price"):
+            p = self._to_price(quote.get(key))
+            if p > 0:
+                return p, "kiwoom-live-ka10001"
+
+        ob = self.tr_post("live", "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
+        bid = self._to_price(ob.get("buy_fpr_bid"))
+        ask = self._to_price(ob.get("sel_fpr_bid"))
+        if bid > 0 and ask > 0:
+            return (bid + ask) // 2, "kiwoom-live-ka10004-mid"
+        if bid > 0:
+            return bid, "kiwoom-live-ka10004-bid"
+        if ask > 0:
+            return ask, "kiwoom-live-ka10004-ask"
+        return 0, "kiwoom-live-unavailable"
 
     def submit_order(self, mode: str, side: str, code: str, qty: int, price: int) -> dict[str, Any]:
         if not self.can_live_order():
@@ -137,7 +161,7 @@ def json_response(handler: BaseHTTPRequestHandler, status: int, data: dict[str, 
 
 
 def demo_quote(code: str) -> int:
-    seed = sum(ord(c) for c in code) + int(time.time() // 2)
+    seed = sum(ord(c) for c in code)
     return max(1000, 9000 + (seed % 300) - 150)
 
 
@@ -215,10 +239,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not code:
                     json_response(self, 400, {"error": "missing code"})
                     return
-                mode = STATE["trade_mode"]
                 if KIWOOM.enabled():
-                    price = KIWOOM.quote(mode, code)
-                    json_response(self, 200, {"code": code, "price": price, "source": f"kiwoom-{mode}"})
+                    price, source = KIWOOM.quote(code)
+                    if price <= 0:
+                        json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
+                        return
+                    json_response(self, 200, {"code": code, "price": price, "source": source})
                 else:
                     json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo"})
                 return
