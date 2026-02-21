@@ -47,7 +47,7 @@ class KiwoomGateway:
             return self._token[mode]
         payload = self._post_json(
             f"{self._base(mode)}/oauth2/token",
-            {},
+            {"Content-Type": "application/json;charset=UTF-8"},
             {"grant_type": "client_credentials", "appkey": self.appkey, "secretkey": self.secret},
         )
         self._token[mode] = payload["access_token"]
@@ -97,25 +97,36 @@ class KiwoomGateway:
             return ask, "ask"
         return 0, "none"
 
-    def quote(self, code: str, preferred_mode: str = "mock") -> tuple[int, str]:
-        modes = [preferred_mode, "live" if preferred_mode == "mock" else "mock"]
+    def quote(self, code: str) -> tuple[int, str]:
         errors: list[str] = []
-        for mode in modes:
-            try:
-                quote = self.tr_post(mode, "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+
+        try:
+            quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+            data = quote.get("output") if isinstance(quote, dict) else None
+            if isinstance(data, dict):
+                current = self._extract_from_quote(data)
+                if current > 0:
+                    return current, "kiwoom-live-ka10001-output"
+            if isinstance(quote, dict):
                 current = self._extract_from_quote(quote)
                 if current > 0:
-                    return current, f"kiwoom-{mode}-ka10001"
-            except Exception as exc:  # nosec
-                errors.append(f"{mode}:ka10001:{exc}")
+                    return current, "kiwoom-live-ka10001-top"
+        except Exception as exc:  # nosec
+            errors.append(f"live:ka10001:{exc}")
 
-            try:
-                ob = self.tr_post(mode, "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
+        try:
+            ob = self.tr_post("live", "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
+            ob_data = ob.get("output") if isinstance(ob, dict) else None
+            if isinstance(ob_data, dict):
+                current, kind = self._extract_from_orderbook(ob_data)
+                if current > 0:
+                    return current, f"kiwoom-live-ka10004-{kind}-output"
+            if isinstance(ob, dict):
                 current, kind = self._extract_from_orderbook(ob)
                 if current > 0:
-                    return current, f"kiwoom-{mode}-ka10004-{kind}"
-            except Exception as exc:  # nosec
-                errors.append(f"{mode}:ka10004:{exc}")
+                    return current, f"kiwoom-live-ka10004-{kind}-top"
+        except Exception as exc:  # nosec
+            errors.append(f"live:ka10004:{exc}")
 
         return 0, "quote-unavailable | " + " ; ".join(errors[-4:])
 
@@ -166,6 +177,7 @@ def save_state(state: dict[str, Any]) -> None:
 
 
 STATE = load_state()
+LAST_PRICE: dict[str, int] = {}
 
 
 def json_response(handler: BaseHTTPRequestHandler, status: int, data: dict[str, Any]) -> None:
@@ -260,13 +272,20 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 400, {"error": "missing code"})
                     return
                 if KIWOOM.enabled():
-                    mode = STATE["trade_mode"]
-                    price, source = KIWOOM.quote(code, preferred_mode=mode)
+                    price, source = KIWOOM.quote(code)
                     if price > 0:
+                        with LOCK:
+                            LAST_PRICE[code] = price
                         json_response(self, 200, {"code": code, "price": price, "source": source})
                         return
-                    # API 조회 실패 시 화면 모니터링이 끊기지 않도록 데모가로 폴백한다.
-                    json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo-fallback", "warning": source})
+
+                    with LOCK:
+                        last = LAST_PRICE.get(code)
+                    if last is not None:
+                        json_response(self, 200, {"code": code, "price": last, "source": "last-good", "warning": source})
+                        return
+
+                    json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
                 else:
                     json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo"})
                 return
