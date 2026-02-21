@@ -3,48 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>국내 주식 제안형 자동매매 보조 프로그램</title>
+    <title>국내 주식 자동실행 프로그램 (로컬)</title>
     <style>
       * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-        background: #f3f5f7;
-        color: #1f2937;
-      }
-      .container { max-width: 1120px; margin: 24px auto; padding: 0 14px 28px; }
-      .panel {
-        background: #fff; border: 1px solid #d8e1e8; border-radius: 12px;
-        box-shadow: 0 4px 18px rgba(0,0,0,0.05); padding: 18px; margin-bottom: 14px;
-      }
-      h1 { margin: 0 0 8px; color: #0b4f71; font-size: 1.55rem; }
-      h2 { margin: 0 0 10px; color: #0b4f71; }
+      body { margin: 0; font-family: "Noto Sans KR", sans-serif; background: #f3f5f7; color: #1f2937; }
+      .container { max-width: 1080px; margin: 20px auto; padding: 0 14px 24px; }
+      .panel { background: #fff; border: 1px solid #d8e1e8; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+      h1 { margin: 0 0 8px; color: #0b4f71; font-size: 1.45rem; }
+      h2 { margin: 0 0 10px; color: #0b4f71; font-size: 1.1rem; }
       .muted { color: #526070; margin: 0; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
-      label { display:block; font-size:.85rem; color:#334155; margin-bottom:4px; }
-      input, select, button {
-        width:100%; border:1px solid #c7d3de; border-radius:8px; padding:8px 10px; font-size:.95rem;
-      }
-      button { background:#0b4f71; color:#fff; font-weight:700; cursor:pointer; }
-      button:hover { background:#0a435f; }
-      .chip { display:inline-block; background:#e6f4ff; color:#075985; border-radius:999px; padding:2px 8px; font-size:.8rem; }
-      .status { margin-top:10px; font-size:.92rem; color:#0f5132; }
-      .warn { color:#9f1239; }
-      .small { font-size:.82rem; color:#576575; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      table { width:100%; border-collapse:collapse; font-size:.9rem; }
-      th, td { border-bottom:1px solid #e7edf2; padding:8px; text-align:right; white-space:nowrap; }
-      th:first-child, td:first-child, td:nth-child(2), th:nth-child(2), td:last-child, th:last-child { text-align:left; }
-      th { background:#f8fbfd; color:#0b4f71; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+      label { display: block; margin-bottom: 4px; font-size: .84rem; color: #374151; }
+      input, button { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; }
+      button { background: #0b4f71; color: #fff; font-weight: 700; cursor: pointer; }
+      button.secondary { background: #475569; }
+      button.danger { background: #b91c1c; }
+      .row-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .status { margin-top: 8px; font-size: .9rem; color: #0f5132; }
+      .warn { color: #9f1239; }
+      table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+      th, td { border-bottom: 1px solid #e5ebf1; padding: 8px; text-align: right; }
+      th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child { text-align: left; }
+      th { background: #f8fbfd; color: #0b4f71; }
+      .small { font-size: .82rem; color: #5b6878; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     </style>
   </head>
   <body>
     <main class="container">
       <section class="panel">
-        <h1>국내 주식 제안형 자동매매 보조 프로그램 <span class="chip">Local Proxy Mode</span></h1>
+        <h1>국내 주식 자동실행 프로그램</h1>
         <p class="muted">
-          브라우저는 로컬 프록시 서버(<span class="mono">127.0.0.1</span>)에만 요청하고,
-          키움 AppKey/Secret은 로컬 서버 환경변수에서만 사용합니다.
+          분석 파라미터를 단순화하고, 사용자가 입력한 <strong>종목/매수가/목표가/손절가/수량</strong> 기준으로
+          가격 도달 시 자동 실행하도록 구성했습니다. (로컬 서버에서 주문 실행)
         </p>
       </section>
 
@@ -52,242 +43,215 @@
         <h2>로컬 서버 연결</h2>
         <div class="grid">
           <div>
-            <label for="apiBase">로컬 서버 주소</label>
-            <input id="apiBase" type="text" value="http://127.0.0.1:9000" />
+            <label for="apiBase">로컬 API 주소</label>
+            <input id="apiBase" value="http://127.0.0.1:9000" />
           </div>
           <div>
-            <label for="marketType">시장</label>
-            <select id="marketType">
-              <option value="000">전체</option>
-              <option value="001">코스피</option>
-              <option value="101">코스닥</option>
-            </select>
+            <label for="pollMs">가격 조회 주기(ms)</label>
+            <input id="pollMs" type="number" min="500" step="500" value="2000" />
           </div>
-          <div>
-            <label for="useDemo">API 실패 시 데모 사용</label>
-            <select id="useDemo">
-              <option value="yes" selected>예</option>
-              <option value="no">아니오</option>
-            </select>
-          </div>
-          <div style="align-self:end">
+          <div style="align-self: end;">
             <button id="healthBtn" type="button">연결 확인</button>
           </div>
         </div>
-        <p id="healthStatus" class="small">로컬 서버 실행 후 연결 확인을 누르세요.</p>
+        <p id="healthStatus" class="small">연결 확인 전</p>
       </section>
 
       <section class="panel">
-        <h2>분석 파라미터</h2>
+        <h2>자동매매 규칙 추가</h2>
         <div class="grid">
-          <div><label for="equity">계좌자산(원)</label><input id="equity" type="number" min="100000" step="10000" value="10000000" /></div>
-          <div><label for="riskPct">1회 리스크(%)</label><input id="riskPct" type="number" min="0.1" max="3" step="0.1" value="0.5" /></div>
-          <div><label for="horizon">예측 기간(거래일)</label><select id="horizon"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></div>
-          <div><label for="minProb">최소 확률(%)</label><input id="minProb" type="number" min="40" max="90" step="1" value="58" /></div>
-          <div><label for="maxSpread">최대 스프레드(틱)</label><input id="maxSpread" type="number" min="1" max="8" step="1" value="3" /></div>
-          <div><label for="minDepth">최소 매수 깊이</label><input id="minDepth" type="number" min="1000" step="1000" value="120000" /></div>
-          <div style="align-self:end"><button id="runBtn" type="button">API 분석 실행</button></div>
+          <div><label for="code">종목코드</label><input id="code" value="005930" /></div>
+          <div><label for="buy">매수가(이하 도달 시 매수)</label><input id="buy" type="number" value="9000" /></div>
+          <div><label for="tp">목표가(이상 도달 시 매도)</label><input id="tp" type="number" value="9900" /></div>
+          <div><label for="sl">손절가(이하 도달 시 매도)</label><input id="sl" type="number" value="8700" /></div>
+          <div><label for="qty">수량</label><input id="qty" type="number" min="1" step="1" value="10" /></div>
+          <div style="align-self: end;"><button id="addRuleBtn" type="button">규칙 추가</button></div>
         </div>
-        <p id="status" class="status">준비됨</p>
+        <p class="small">규칙 상태: 대기 → 매수완료(보유중) → 목표/손절 매도완료</p>
       </section>
 
       <section class="panel">
-        <h2>추천 결과</h2>
+        <h2>규칙 목록</h2>
+        <div class="row-buttons">
+          <button id="startBtn" type="button">모니터링 시작</button>
+          <button id="stopBtn" class="secondary" type="button">모니터링 중지</button>
+          <button id="clearBtn" class="danger" type="button">규칙 전체 삭제</button>
+        </div>
+        <p id="status" class="status">대기중</p>
         <table>
           <thead>
             <tr>
-              <th>종목코드</th><th>종목명</th><th>현재가</th><th>스프레드(틱)</th><th>매수깊이</th>
-              <th>유동성점수</th><th>상승확률</th><th>추천매수가</th><th>목표가</th><th>손절가</th><th>권장수량</th><th>근거</th>
+              <th>ID</th><th>종목</th><th>현재가</th><th>매수가</th><th>목표가</th><th>손절가</th><th>수량</th><th>상태</th><th>최근실행</th>
             </tr>
           </thead>
-          <tbody id="resultBody"></tbody>
+          <tbody id="ruleBody"></tbody>
         </table>
-        <p class="small">※ 이 화면은 자동주문이 아닌 사용자 수동 의사결정 보조입니다.</p>
+      </section>
+
+      <section class="panel">
+        <h2>실행 로그</h2>
+        <table>
+          <thead><tr><th>시각</th><th>종목</th><th>액션</th><th>가격</th><th>수량</th><th>결과</th></tr></thead>
+          <tbody id="logBody"></tbody>
+        </table>
+        <p class="small">※ 브라우저에는 AppKey/Secret 저장 금지. 주문은 로컬 서버에서만 전송.</p>
       </section>
     </main>
 
     <script>
-      const sampleUniverse = [
-        { code: "123456", name: "한빛정밀", price: 9850, spreadTicks: 1, depthBuy3: 182000, atr: 210, tradeValue20d: 7800000000, momentum20d: 0.08 },
-        { code: "234567", name: "미래소재", price: 7420, spreadTicks: 2, depthBuy3: 126000, atr: 185, tradeValue20d: 5300000000, momentum20d: 0.05 },
-        { code: "567890", name: "동해테크", price: 9150, spreadTicks: 2, depthBuy3: 153000, atr: 235, tradeValue20d: 6400000000, momentum20d: 0.06 }
-      ];
-      const krw = (n) => Number(n || 0).toLocaleString("ko-KR");
-      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      const state = { rules: [], logs: [], timer: null, nextId: 1 };
 
-      function tickSize(price) {
-        if (price < 2000) return 1;
-        if (price < 5000) return 5;
-        if (price < 20000) return 10;
-        if (price < 50000) return 50;
-        if (price < 200000) return 100;
-        if (price < 500000) return 500;
-        return 1000;
-      }
+      const q = (id) => document.getElementById(id);
+      const now = () => new Date().toLocaleTimeString("ko-KR", { hour12: false });
 
-      function roundToTick(price, mode = "nearest") {
-        const tick = tickSize(price);
-        const q = price / tick;
-        if (mode === "up") return Math.ceil(q) * tick;
-        if (mode === "down") return Math.floor(q) * tick;
-        return Math.round(q) * tick;
-      }
-
-      function estimateProbability(row) {
-        const liq = clamp((row.depthBuy3 / 220000) * 0.45 + (1 - row.spreadTicks / 6) * 0.35 + (row.tradeValue20d / 10000000000) * 0.2, 0, 1);
-        const momentum = clamp((row.momentum20d + 0.05) / 0.2, 0, 1);
-        return clamp(0.35 + liq * 0.35 + momentum * 0.3, 0.05, 0.95);
-      }
-
-      async function fetchJson(url) {
-        const res = await fetch(url);
+      async function getJson(url, options = {}) {
+        const res = await fetch(url, options);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }
 
-      function normalizeCandidates(payload) {
-        const arr = Array.isArray(payload) ? payload : payload.items || payload.data || payload.list || [];
-        return arr.map((it, idx) => ({
-          code: String(it.code || it.stk_cd || it.iscd || `UNK${idx}`),
-          name: String(it.name || it.stk_nm || it.hts_kor_isnm || `종목${idx + 1}`),
-          price: Number(it.price || it.cur_prc || it.stk_prpr || 0),
-          atr: Number(it.atr || 150),
-          momentum20d: Number(it.momentum20d || 0.03),
-          tradeValue20d: Number(it.tradeValue20d || it.acml_tr_pbmn || 0),
-          spreadTicks: Number(it.spreadTicks || 99),
-          depthBuy3: Number(it.depthBuy3 || 0)
-        }));
-      }
+      function base() { return q("apiBase").value.trim().replace(/\/$/, ""); }
 
-      function normalizeOrderbook(payload) {
-        const ask1 = Number(payload.ask1 || payload.sel_fpr_bid || payload.best_ask || payload?.output?.sel_fpr_bid || 0);
-        const bid1 = Number(payload.bid1 || payload.buy_fpr_bid || payload.best_bid || payload?.output?.buy_fpr_bid || 0);
-        const b1 = Number(payload.buyQty1 || payload.buy_hoga_qty_1 || 0);
-        const b2 = Number(payload.buyQty2 || payload.buy_hoga_qty_2 || 0);
-        const b3 = Number(payload.buyQty3 || payload.buy_hoga_qty_3 || 0);
-        const spread = Math.max(0, ask1 - bid1);
-        const mid = (ask1 + bid1) / 2;
-        return {
-          spreadTicks: ask1 > 0 && bid1 > 0 ? Math.max(1, Math.round(spread / tickSize(mid))) : 99,
-          depthBuy3: b1 + b2 + b3,
-          price: bid1 > 0 ? bid1 : ask1
-        };
-      }
-
-      async function loadUniverse(cfg) {
-        const base = cfg.apiBase.replace(/\/$/, "");
-        const raw = normalizeCandidates(await fetchJson(`${base}/candidates?market=${encodeURIComponent(cfg.marketType)}`));
-        const out = [];
-        for (const c of raw) {
-          try {
-            const ob = normalizeOrderbook(await fetchJson(`${base}/orderbook/${encodeURIComponent(c.code)}`));
-            out.push({ ...c, ...ob, price: c.price || ob.price || 0 });
-          } catch {
-            out.push(c);
-          }
+      async function checkHealth() {
+        try {
+          const h = await getJson(`${base()}/health`);
+          q("healthStatus").textContent = `연결 성공: ${h.status} (mode=${h.mode || "unknown"})`;
+          q("healthStatus").classList.remove("warn");
+        } catch (e) {
+          q("healthStatus").textContent = `연결 실패: ${e.message}`;
+          q("healthStatus").classList.add("warn");
         }
-        return out;
       }
 
-      function recommend(row, cfg) {
-        if (row.price > 10000 || row.price <= 0) return null;
-        if (row.spreadTicks > cfg.maxSpread) return null;
-        if (row.depthBuy3 < cfg.minDepth) return null;
-
-        const prob = estimateProbability(row);
-        if (prob < cfg.minProb / 100) return null;
-
-        const entryLow = roundToTick(row.price - tickSize(row.price), "down");
-        const entryHigh = roundToTick(row.price + tickSize(row.price), "up");
-        const tp = roundToTick(entryHigh * 1.1, "up");
-        const sl = roundToTick(entryLow - row.atr * 2, "down");
-        const riskPerShare = Math.max(entryHigh - sl, tickSize(row.price));
-        const qty = Math.max(1, Math.floor((cfg.equity * (cfg.riskPct / 100)) / riskPerShare));
-        const liqScore = clamp((row.depthBuy3 / 220000) * 50 + (4 - row.spreadTicks) * 10 + (row.tradeValue20d / 10000000000) * 40, 0, 100);
-
-        return {
-          ...row, prob, liqScore,
-          entryText: `${krw(entryLow)}~${krw(entryHigh)}`,
-          tp, sl, qty,
-          reason: `H${cfg.horizon}D 확률 ${(prob*100).toFixed(1)}%, 스프레드 ${row.spreadTicks}틱, depth ${krw(row.depthBuy3)}`
+      function addRule() {
+        const rule = {
+          id: state.nextId++,
+          code: q("code").value.trim(),
+          buy: Number(q("buy").value),
+          tp: Number(q("tp").value),
+          sl: Number(q("sl").value),
+          qty: Number(q("qty").value),
+          status: "대기",
+          current: 0,
+          lastExec: "-",
+          inPosition: false
         };
-      }
-
-      function render(rows) {
-        const body = document.getElementById("resultBody");
-        body.innerHTML = "";
-        if (!rows.length) {
-          body.innerHTML = '<tr><td colspan="12" class="warn">조건을 만족하는 종목이 없습니다.</td></tr>';
+        if (!rule.code || rule.qty <= 0 || rule.buy <= 0 || rule.tp <= 0 || rule.sl <= 0) {
+          q("status").textContent = "규칙 값이 올바르지 않습니다.";
+          q("status").classList.add("warn");
           return;
         }
-        for (const row of rows) {
+        state.rules.push(rule);
+        q("status").textContent = `규칙 ${rule.id} 추가 완료`;
+        q("status").classList.remove("warn");
+        renderRules();
+      }
+
+      async function getCurrentPrice(code) {
+        const r = await getJson(`${base()}/quote/${encodeURIComponent(code)}`);
+        return Number(r.price || 0);
+      }
+
+      async function executeOrder(action, rule, price) {
+        const payload = { code: rule.code, side: action, qty: rule.qty, price };
+        const result = await getJson(`${base()}/orders/execute`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        state.logs.unshift({ time: now(), code: rule.code, action, price, qty: rule.qty, result: result.message || result.status || "ok" });
+        state.logs = state.logs.slice(0, 100);
+        renderLogs();
+      }
+
+      async function tick() {
+        for (const rule of state.rules) {
+          if (rule.status === "완료") continue;
+          try {
+            const p = await getCurrentPrice(rule.code);
+            rule.current = p;
+
+            if (!rule.inPosition && p <= rule.buy) {
+              await executeOrder("BUY", rule, p);
+              rule.inPosition = true;
+              rule.status = "매수완료(보유중)";
+              rule.lastExec = `${now()} BUY ${p}`;
+            } else if (rule.inPosition && p >= rule.tp) {
+              await executeOrder("SELL", rule, p);
+              rule.inPosition = false;
+              rule.status = "완료(목표가 매도)";
+              rule.lastExec = `${now()} SELL(TP) ${p}`;
+            } else if (rule.inPosition && p <= rule.sl) {
+              await executeOrder("SELL", rule, p);
+              rule.inPosition = false;
+              rule.status = "완료(손절 매도)";
+              rule.lastExec = `${now()} SELL(SL) ${p}`;
+            }
+          } catch (e) {
+            rule.status = `오류(${e.message})`;
+          }
+        }
+        renderRules();
+      }
+
+      function startMonitor() {
+        stopMonitor();
+        const ms = Math.max(500, Number(q("pollMs").value || 2000));
+        state.timer = setInterval(tick, ms);
+        q("status").textContent = `모니터링 시작 (${ms}ms 주기)`;
+        q("status").classList.remove("warn");
+        tick();
+      }
+
+      function stopMonitor() {
+        if (state.timer) clearInterval(state.timer);
+        state.timer = null;
+        q("status").textContent = "모니터링 중지";
+      }
+
+      function clearRules() {
+        stopMonitor();
+        state.rules = [];
+        renderRules();
+      }
+
+      function renderRules() {
+        const body = q("ruleBody");
+        body.innerHTML = "";
+        if (!state.rules.length) {
+          body.innerHTML = '<tr><td colspan="9" class="warn">등록된 규칙이 없습니다.</td></tr>';
+          return;
+        }
+        for (const r of state.rules) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${row.code}</td><td>${row.name}</td><td>${krw(row.price)}</td><td>${row.spreadTicks}</td><td>${krw(row.depthBuy3)}</td><td>${row.liqScore.toFixed(1)}</td><td>${(row.prob*100).toFixed(1)}%</td><td>${row.entryText}</td><td>${krw(row.tp)}</td><td>${krw(row.sl)}</td><td>${krw(row.qty)}</td><td>${row.reason}</td>`;
+          tr.innerHTML = `<td>${r.id}</td><td>${r.code}</td><td>${r.current || "-"}</td><td>${r.buy}</td><td>${r.tp}</td><td>${r.sl}</td><td>${r.qty}</td><td>${r.status}</td><td>${r.lastExec}</td>`;
           body.appendChild(tr);
         }
       }
 
-      function getConfig() {
-        return {
-          apiBase: document.getElementById("apiBase").value.trim(),
-          marketType: document.getElementById("marketType").value,
-          useDemo: document.getElementById("useDemo").value === "yes",
-          equity: Number(document.getElementById("equity").value),
-          riskPct: Number(document.getElementById("riskPct").value),
-          horizon: Number(document.getElementById("horizon").value),
-          minProb: Number(document.getElementById("minProb").value),
-          maxSpread: Number(document.getElementById("maxSpread").value),
-          minDepth: Number(document.getElementById("minDepth").value)
-        };
-      }
-
-      async function checkHealth() {
-        const cfg = getConfig();
-        const el = document.getElementById("healthStatus");
-        try {
-          const base = cfg.apiBase.replace(/\/$/, "");
-          const h = await fetchJson(`${base}/health`);
-          el.textContent = `연결 성공: ${h.status} (${h.mode || "unknown"})`;
-          el.classList.remove("warn");
-        } catch (e) {
-          el.textContent = `연결 실패: ${e.message}`;
-          el.classList.add("warn");
+      function renderLogs() {
+        const body = q("logBody");
+        body.innerHTML = "";
+        if (!state.logs.length) {
+          body.innerHTML = '<tr><td colspan="6">로그 없음</td></tr>';
+          return;
+        }
+        for (const log of state.logs) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${log.time}</td><td>${log.code}</td><td>${log.action}</td><td>${log.price}</td><td>${log.qty}</td><td>${log.result}</td>`;
+          body.appendChild(tr);
         }
       }
 
-      async function runAnalysis() {
-        const cfg = getConfig();
-        const status = document.getElementById("status");
-        status.textContent = "API 호출 및 분석 중...";
-        status.classList.remove("warn");
+      q("healthBtn").addEventListener("click", checkHealth);
+      q("addRuleBtn").addEventListener("click", addRule);
+      q("startBtn").addEventListener("click", startMonitor);
+      q("stopBtn").addEventListener("click", stopMonitor);
+      q("clearBtn").addEventListener("click", clearRules);
 
-        let universe;
-        try {
-          universe = await loadUniverse(cfg);
-        } catch (e) {
-          if (!cfg.useDemo) {
-            status.textContent = `API 호출 실패: ${e.message}`;
-            status.classList.add("warn");
-            render([]);
-            return;
-          }
-          universe = sampleUniverse;
-          status.textContent = `API 실패(${e.message}) → 데모 데이터로 분석합니다.`;
-          status.classList.add("warn");
-        }
-
-        const rows = universe.map((r) => recommend(r, cfg)).filter(Boolean).sort((a,b) => b.prob - a.prob || b.liqScore - a.liqScore);
-        render(rows);
-        if (rows.length) {
-          status.textContent = `추천 ${rows.length}건 계산 완료`;
-          status.classList.remove("warn");
-        }
-      }
-
-      document.getElementById("healthBtn").addEventListener("click", checkHealth);
-      document.getElementById("runBtn").addEventListener("click", runAnalysis);
+      renderRules();
+      renderLogs();
       checkHealth();
-      runAnalysis();
     </script>
   </body>
 </html>
