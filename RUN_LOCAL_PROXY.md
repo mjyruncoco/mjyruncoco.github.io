@@ -49,7 +49,8 @@ python -m http.server 8000
 - 일자별 요약은 `/reports/daily`로 확인합니다.
 
 ## 주의
-- `GET /quote/{code}` 는 장중/장외 왜곡을 줄이기 위해 모드와 무관하게 실전 시세 API 기준으로 현재가를 조회합니다.
+- `GET /quote/{code}` 는 현재 모드 기준으로 먼저 조회하고, 실패하면 반대 모드 TR까지 자동 재시도합니다.
+- 그래도 시세 조회가 실패하면 `demo-fallback` 가격으로 응답하며 `warning` 필드에 실패 원인을 담습니다.
 - 주문 전송 여부만 `mock|live` 모드 + `AUTO_LIVE_ORDER` 설정의 영향을 받습니다.
 - `AUTO_LIVE_ORDER=true` + 계좌정보 설정 시 실제 주문 전송될 수 있습니다.
 - 먼저 `mock` + `AUTO_LIVE_ORDER=false`로 충분히 검증하세요.

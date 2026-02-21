@@ -79,25 +79,45 @@ class KiwoomGateway:
             return 0
         return int(text)
 
-    def quote(self, code: str) -> tuple[int, str]:
-        # 현재가 조회는 주문 모드(mock/live)와 분리해서 항상 실전 시세로 조회한다.
-        # (모의 도메인 시세가 장외/비정상적으로 보이는 경우를 피하기 위함)
-        quote = self.tr_post("live", "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+    def _extract_from_quote(self, payload: dict[str, Any]) -> int:
         for key in ("cur_prc", "cur_price", "stck_prpr", "now_prc", "price"):
-            p = self._to_price(quote.get(key))
+            p = self._to_price(payload.get(key))
             if p > 0:
-                return p, "kiwoom-live-ka10001"
+                return p
+        return 0
 
-        ob = self.tr_post("live", "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
-        bid = self._to_price(ob.get("buy_fpr_bid"))
-        ask = self._to_price(ob.get("sel_fpr_bid"))
+    def _extract_from_orderbook(self, payload: dict[str, Any]) -> tuple[int, str]:
+        bid = self._to_price(payload.get("buy_fpr_bid"))
+        ask = self._to_price(payload.get("sel_fpr_bid"))
         if bid > 0 and ask > 0:
-            return (bid + ask) // 2, "kiwoom-live-ka10004-mid"
+            return (bid + ask) // 2, "mid"
         if bid > 0:
-            return bid, "kiwoom-live-ka10004-bid"
+            return bid, "bid"
         if ask > 0:
-            return ask, "kiwoom-live-ka10004-ask"
-        return 0, "kiwoom-live-unavailable"
+            return ask, "ask"
+        return 0, "none"
+
+    def quote(self, code: str, preferred_mode: str = "mock") -> tuple[int, str]:
+        modes = [preferred_mode, "live" if preferred_mode == "mock" else "mock"]
+        errors: list[str] = []
+        for mode in modes:
+            try:
+                quote = self.tr_post(mode, "/api/dostk/mrkcond", "ka10001", {"stk_cd": code})
+                current = self._extract_from_quote(quote)
+                if current > 0:
+                    return current, f"kiwoom-{mode}-ka10001"
+            except Exception as exc:  # nosec
+                errors.append(f"{mode}:ka10001:{exc}")
+
+            try:
+                ob = self.tr_post(mode, "/api/dostk/mrkcond", "ka10004", {"stk_cd": code})
+                current, kind = self._extract_from_orderbook(ob)
+                if current > 0:
+                    return current, f"kiwoom-{mode}-ka10004-{kind}"
+            except Exception as exc:  # nosec
+                errors.append(f"{mode}:ka10004:{exc}")
+
+        return 0, "quote-unavailable | " + " ; ".join(errors[-4:])
 
     def submit_order(self, mode: str, side: str, code: str, qty: int, price: int) -> dict[str, Any]:
         if not self.can_live_order():
@@ -240,11 +260,13 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 400, {"error": "missing code"})
                     return
                 if KIWOOM.enabled():
-                    price, source = KIWOOM.quote(code)
-                    if price <= 0:
-                        json_response(self, 502, {"error": "quote unavailable", "code": code, "source": source})
+                    mode = STATE["trade_mode"]
+                    price, source = KIWOOM.quote(code, preferred_mode=mode)
+                    if price > 0:
+                        json_response(self, 200, {"code": code, "price": price, "source": source})
                         return
-                    json_response(self, 200, {"code": code, "price": price, "source": source})
+                    # API 조회 실패 시 화면 모니터링이 끊기지 않도록 데모가로 폴백한다.
+                    json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo-fallback", "warning": source})
                 else:
                     json_response(self, 200, {"code": code, "price": demo_quote(code), "source": "demo"})
                 return
